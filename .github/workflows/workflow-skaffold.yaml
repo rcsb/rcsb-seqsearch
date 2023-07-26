@@ -9,7 +9,7 @@ jobs:
   skaffold_deploy_staging:
     name: "Skaffold deploy into staging namespace"
     if: (github.ref == github.event.repository.default_branch) && (github.event_name != 'pull_request')
-    uses: rcsb/devops-cicd-github-actions/.github/workflows/deploy_skaffold.yaml
+    uses: rcsb/devops-cicd-github-actions/.github/workflows/deploy_skaffold.yaml@master
     with:
       namespace: staging
       profile: staging
@@ -19,7 +19,7 @@ jobs:
     if: (github.ref == github.event.repository.default_branch) && (github.event_name != 'pull_request')
     needs:
       - skaffold_deploy_staging
-    uses: rcsb/devops-cicd-github-actions/.github/workflows/deploy_skaffold.yaml
+    uses: rcsb/devops-cicd-github-actions/.github/workflows/deploy_skaffold.yaml@master
     with:
       namespace: production
       profile: production
