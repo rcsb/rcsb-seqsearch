@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "helm_chart.configmapName" . }}
+  labels:
+    {{- include "helm_chart.labels" . | nindent 4 }}
+data:
+{{- range $file, $_ := .Values.appConfigs }}
+  {{ $file }}: |
+{{ $_.value | indent 4 }}
+{{- end -}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "helm_chart.dbParamsName" . }}
+  labels:
+    {{- include "helm_chart.labels" . | nindent 4 }}
+data:
+{{- range $file, $_ := .Values.databaseParams }}
+  {{ $file }}: |
+{{ $_.value | indent 4 }}
+{{- end -}}

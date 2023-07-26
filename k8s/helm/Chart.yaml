@@ -1,0 +1,8 @@
+apiVersion: v2
+name: rcsb-seqsearch
+description: An Helm chart for the RCSB seqsearch service
+
+type: application
+
+version: 0.1.0
+appVersion: "version-5"
