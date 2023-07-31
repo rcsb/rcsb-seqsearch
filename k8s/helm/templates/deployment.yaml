@@ -23,6 +23,8 @@ spec:
       labels:
         {{- include "helm_chart.selectorLabels" . | nindent 8 }}
     spec:
+      securityContext:
+        fsGroup: 1000
       initContainers:
         - name: database-loader
           image: busybox:1.36
@@ -30,25 +32,30 @@ spec:
           volumeMounts:
             - mountPath: /opt/database-params
               name: {{ include "helm_chart.dbParamsName" . }}
-            - mountPath: /opt/database
-              name: database
+            - mountPath: /opt/databases
+              name: databases
           command: ["/bin/sh", "-c"]
           args:
-            - cp /opt/database-params/*.params /opt/database;
-            - curl "{{ .Values.buildlockerURL }}/4-coastal/pdb_protein_sequence.fasta-{{ .Values.pool }}.gz" | gzip -d > /opt/databases/pdb_protein_sequence.fasta;
-            - curl "{{ .Values.buildlockerURL }}/4-coastal/pdb_dna_sequence.fasta-{{ .Values.pool }}.gz" | gzip -d > /opt/databases/pdb_dna_sequence.fasta;
-            - curl "{{ .Values.buildlockerURL }}/4-coastal/pdb_rna_sequence.fasta-{{ .Values.pool }}.gz" | gzip -d > /opt/databases/pdb_rna_sequence.fasta;
-            - curl "{{ .Values.buildlockerURL }}/4-coastal/models_protein_sequence.fasta-{{ .Values.pool }}.gz" | gzip -d > /opt/databases/models_protein_sequence.fasta;
-            - curl "{{ .Values.buildlockerURL }}/4-coastal/models_dna_sequence.fasta-{{ .Values.pool }}.gz" | gzip -d > /opt/databases/models_dna_sequence.fasta;
-            - curl "{{ .Values.buildlockerURL }}/4-coastal/models_rna_sequence.fasta-{{ .Values.pool }}.gz" | gzip -d > /opt/databases/models_rna_sequence.fasta;
-              # we create another set of databases to search in PDB + CSM sequences at the same time, this ensures comparable scores between PDB and CSM sequences
-            - cat /opt/databases/pdb_protein_sequence.fasta /opt/databases/models_protein_sequence.fasta > /opt/databases/pdb_and_models_protein_sequence.fasta;
-            - cat /opt/databases/pdb_dna_sequence.fasta /opt/databases/models_dna_sequence.fasta > /opt/databases/pdb_and_models_dna_sequence.fasta;
-            - cat /opt/databases/pdb_rna_sequence.fasta /opt/databases/models_rna_sequence.fasta > /opt/databases/pdb_and_models_rna_sequence.fasta
+            - >
+              echo "Loading DB directory";
+              cp /opt/database-params/*.params /opt/databases;
+              ls -lrt /opt/databases;
+              echo "Pulling files from buildlocker";
+              wget -O - "{{ .Values.buildlockerURL }}/4-coastal/pdb_protein_sequence.fasta-{{ .Values.pool }}.gz" | gzip -d > /opt/databases/pdb_protein_sequence.fasta;
+              wget -O - "{{ .Values.buildlockerURL }}/4-coastal/pdb_dna_sequence.fasta-{{ .Values.pool }}.gz" | gzip -d > /opt/databases/pdb_dna_sequence.fasta;
+              wget -O - "{{ .Values.buildlockerURL }}/4-coastal/pdb_rna_sequence.fasta-{{ .Values.pool }}.gz" | gzip -d > /opt/databases/pdb_rna_sequence.fasta;
+              wget -O - "{{ .Values.buildlockerURL }}/4-coastal/models_protein_sequence.fasta-{{ .Values.pool }}.gz" | gzip -d > /opt/databases/models_protein_sequence.fasta;
+              wget -O - "{{ .Values.buildlockerURL }}/4-coastal/models_dna_sequence.fasta-{{ .Values.pool }}.gz" | gzip -d > /opt/databases/models_dna_sequence.fasta;
+              wget -O - "{{ .Values.buildlockerURL }}/4-coastal/models_rna_sequence.fasta-{{ .Values.pool }}.gz" | gzip -d > /opt/databases/models_rna_sequence.fasta;
+              echo "# we create another set of databases to search in PDB + CSM sequences at the same time, this ensures comparable scores between PDB and CSM sequences";
+              cat /opt/databases/pdb_protein_sequence.fasta /opt/databases/models_protein_sequence.fasta > /opt/databases/pdb_and_models_protein_sequence.fasta;
+              cat /opt/databases/pdb_dna_sequence.fasta /opt/databases/models_dna_sequence.fasta > /opt/databases/pdb_and_models_dna_sequence.fasta;
+              cat /opt/databases/pdb_rna_sequence.fasta /opt/databases/models_rna_sequence.fasta > /opt/databases/pdb_and_models_rna_sequence.fasta;
+              chown 1000 /opt/databases/*;
+              sed -i "s/\$today/$(date -I)/g" /opt/databases/*params;
+              echo "DB files loading complete";
       containers:
         - name: mmseqs-web-redis
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.redis.repository }}:{{ .Values.image.redis.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.image.redis.pullPolicy }}
           ports:
@@ -76,11 +83,10 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
         - name: mmseqs-web-api
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.web_api.repository }}:{{ .Values.image.web_api.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.web_api.pullPolicy }}
-          command: ["-server", "-config /etc/mmseqs-web/config.json"]
+          command: [ "/sbin/tini" ]
+          args: [ "-s", "--", "/usr/local/bin/mmseqs-web", "-server", "-config", "/etc/mmseqs-web/config.json" ]
           ports:
             - name: client
               containerPort: 3000
@@ -92,30 +98,14 @@ spec:
             - name: {{ include "helm_chart.configmapName" . }}
               mountPath: /etc/mmseqs-web/config.json
               subPath: config.json
-          livenessProbe:
-            initialDelaySeconds: 1440 # Delay probe to allow server to init indices
-            periodSeconds: 30
-            failureThreshold: 6
-            exec:
-              command:
-                - curl -X POST -F q=@/etc/mmseqs-web/test.fasta -F 'mode=accept' -F 'database[]=pdb_and_models_protein_sequence'  http://localhost:8877/api/ticket
-                # This command tests liveness, but also warms up the service with one query. For some reason the first query is always very slow (which makes arches time out on it).
-                # This guarantees that users don't see that problem.
-          readinessProbe:
-            initialDelaySeconds: 1440
-            periodSeconds: 30
-            failureThreshold: 6
-            httpGet:
-              port: 3000
-              path: /
+              readOnly: true
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
         - name: mmseqs-web-worker
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.web_worker.repository }}:{{ .Values.image.web_worker.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.web_worker.pullPolicy }}
-          command: [ "-worker", "-config /etc/mmseqs-web/config.json" ]
+          command: [ "/sbin/tini" ]
+          args: [ "-s", "--", "/usr/local/bin/mmseqs-web", "-worker", "-config", "/etc/mmseqs-web/config.json" ]
           volumeMounts:
             - mountPath: /opt/mmseqs-web/databases
               name: databases
@@ -124,14 +114,10 @@ spec:
             - name: {{ include "helm_chart.configmapName" . }}
               mountPath: /etc/mmseqs-web/config.json
               subPath: config.json
-            - name: {{ include "helm_chart.configmapName" . }}
-              mountPath: /etc/mmseqs-web/test.fasta
-              subPath: test.fasta
+              readOnly: true
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
         - name: mmseqs-web-webserver
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.web_webserver.repository }}:{{ .Values.image.web_webserver.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.web_webserver.pullPolicy }}
           ports:
@@ -140,21 +126,38 @@ spec:
             - name: {{ include "helm_chart.configmapName" . }}
               mountPath: /etc/nginx/conf.d/default.conf
               subPath: nginx.conf
+              readOnly: true
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+        - name: query-warmer
+          image: busybox:1.36
+          imagePullPolicy: Always
+          command: [ "/opt/warm_up_query.sh" ]
+          volumeMounts:
+            - mountPath: "/tmp/test.fasta"
+              name: {{ include "helm_chart.configmapName" . }}
+              subPath: "test.fasta"
+              readOnly: true
+            - mountPath: "/opt/warm_up_query.sh"
+              name: {{ include "helm_chart.configmapName" . }}
+              subPath: "warm_up_query.sh"
       volumes:
         - name: redis-volume
           emptyDir:
             sizeLimit: {{ .Values.ephemeralVolumes.redis_volume.sizeLimit }}
+            medium: "Memory"
         - name: databases
           emptyDir:
             sizeLimit: {{ .Values.ephemeralVolumes.databases.sizeLimit }}
+            medium: "Memory"
         - name: jobs
           emptyDir:
             sizeLimit: {{ .Values.ephemeralVolumes.jobs.sizeLimit }}
+            medium: "Memory"
         - name: {{ include "helm_chart.configmapName" . }}
           configMap:
             name: {{ include "helm_chart.configmapName" . }}
+            defaultMode: 0744
         - name: {{ include "helm_chart.dbParamsName" . }}
           configMap:
             name: {{ include "helm_chart.dbParamsName" . }}

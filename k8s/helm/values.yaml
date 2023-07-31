@@ -12,10 +12,10 @@ autoscaling:
 # The Docker image reference which this Helm chart will run.
 image:
   redis:
-    repository: redis:alpine
+    repository: redis
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    #tag: ""
+    tag: "alpine"
   web_api:
     repository: "soedinglab/mmseqs2-app-backend"
     pullPolicy: IfNotPresent
@@ -63,7 +63,7 @@ securityContext:
 # service declares the type of Service resource to be created, as well as the target port of the Pod to send requests.
 service:
   type: ClusterIP
-  port: 8877
+  port: 80
 
 # ingress declares the Ingress resource to be created and allow access to the service from the external internet.
 # Set ingress.enabled to true to create this Ingress resource. Double-check the host values for your application.
@@ -87,7 +87,11 @@ ingress:
 # Deploy without limits first to test the application performance, then tune afterwards to ensure that autoscaling
 # will work as expected.
 # TODO: Review resource limit values.
-resources: {}
+resources:
+  requests:
+    ephemeral-storage: "10Gi"
+  limits:
+    ephemeral-storage: "50Gi"
   # limits:
   #   cpu: 100m
   #   memory: 128Mi
@@ -106,7 +110,7 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "0.0.0.0:3000",
+          "address"    : "localhost:3000",
           "dbmanagment": false,
           "cors"       : true
         },
@@ -118,7 +122,7 @@ appConfigs:
         },
         "redis" : {
           "network"  : "tcp",
-          "address"  : "mmseqs-web-redis:6379",
+          "address"  : "localhost:6379",
           "password" : "",
           "index"    : 0
         },
@@ -148,14 +152,15 @@ appConfigs:
         
         client_max_body_size 100M;
         
-        access_log /var/log/nginx/mmseqs-web.access.log;
+        access_log /dev/stdout;
+        error_log /dev/stdout info;
         
         root /var/www/mmseqs-web;
         index index.html;
         
         location /api {
           rewrite ^/api(/.*) $1 break;
-          proxy_pass        http://mmseqs-web-api:3000/;
+          proxy_pass        http://localhost:3000/;
           
           proxy_set_header  Host             $host;
           proxy_set_header  X-Real-IP        $remote_addr;
@@ -184,10 +189,19 @@ appConfigs:
         }
       }
   test.fasta:
-    value: |-
+    value: |+
       >4HHB_1
       VLSPADKTNVKAAWGKVGAHAGEYGAEALERMFLSFPTTKTYFPHFDLSHGSAQVKGHGKKVADALTNAVAHVDDMPNALSALSDLHAHKLRVDPVNFKLLSHCLLVTLAAHLPAEFTPAVHASLDKFLASVSTVLTSKYR
-
+  warm_up_query.sh:
+    value: |+
+      #!/bin/sh
+      # Warm up seqsearch service with one query. For some reason the first query is always very slow (which makes arches time out on it). This guarantees that users don't see that problem.
+      echo "# Will now warm up the server with 1 query. This will take 25 minutes"
+      sleep 1440  # give time for server to init indices
+      wget --post-data "q=@/tmp/test.fasta&mode=accept&database[]=pdb_and_models_protein_sequence" http://localhost/api/ticket
+      sleep 60  # give time for query to execute. There's no need to look at results, just let it execute
+      echo "# Done warming up"
+      sleep 86400 # Sleep for 1 day before stopping and having container restart
 databaseParams:
   pdb_protein_sequence.params:
     value: |-
