@@ -86,18 +86,43 @@ ingress:
 # Define resource limits for your application. Especially important if you enable autoscaling for this Helm chart.
 # Deploy without limits first to test the application performance, then tune afterwards to ensure that autoscaling
 # will work as expected.
-# TODO: Review resource limit values.
 resources:
-  requests:
-    ephemeral-storage: "10Gi"
-  limits:
-    ephemeral-storage: "50Gi"
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-#   cpu: 100m
-#   memory: 128Mi
+  redis:
+    requests:
+      ephemeral-storage: "10Gi"
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      ephemeral-storage: "50Gi"
+      cpu: 1
+      memory: 1Gi
+  api:
+    requests:
+      ephemeral-storage: "10Gi"
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      ephemeral-storage: "50Gi"
+      cpu: 1
+      memory: 1Gi
+  worker:
+    requests:
+      ephemeral-storage: "10Gi"
+      cpu: 10m
+      memory: 45Gi
+    limits:
+      ephemeral-storage: "50Gi"
+      cpu: 1
+      memory: 90Gi
+  webserver:
+    requests:
+      ephemeral-storage: "10Gi"
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      ephemeral-storage: "50Gi"
+      cpu: 1
+      memory: 1Gi
 
 # Buildlocker URL
 buildlockerURL: "http://bl-west.rcsb.org"

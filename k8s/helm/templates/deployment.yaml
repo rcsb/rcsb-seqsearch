@@ -81,7 +81,7 @@ spec:
             timeoutSeconds: 5
             periodSeconds: 3
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.resources.redis | nindent 12 }}
         - name: mmseqs-web-api
           image: "{{ .Values.image.web_api.repository }}:{{ .Values.image.web_api.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.web_api.pullPolicy }}
@@ -100,7 +100,7 @@ spec:
               subPath: config.json
               readOnly: true
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.resources.api | nindent 12 }}
         - name: mmseqs-web-worker
           image: "{{ .Values.image.web_worker.repository }}:{{ .Values.image.web_worker.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.web_worker.pullPolicy }}
@@ -116,7 +116,7 @@ spec:
               subPath: config.json
               readOnly: true
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.resources.worker | nindent 12 }}
         - name: mmseqs-web-webserver
           image: "{{ .Values.image.web_webserver.repository }}:{{ .Values.image.web_webserver.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.web_webserver.pullPolicy }}
@@ -129,7 +129,14 @@ spec:
               subPath: nginx.conf
               readOnly: true
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.resources.webserver | nindent 12 }}
+          readinessProbe:
+            initialDelaySeconds: 1440
+            timeoutSeconds: 5
+            periodSeconds: 3
+            httpGet:
+              port: http
+              path: /api/databases
         - name: query-warmer
           image: busybox:1.36
           imagePullPolicy: Always
