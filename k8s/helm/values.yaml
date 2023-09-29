@@ -9,25 +9,27 @@ autoscaling:
   maxReplicas: 100
   targetCPUUtilizationPercentage: 80
 
+imagePullSecrets: "harbor-docker-registry-conf"
+
 # The Docker image reference which this Helm chart will run.
 image:
   redis:
-    repository: redis
+    repository: "harbor.devops.k8s.rcsb.org/dockerhub/library/redis"
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
     tag: "alpine"
   web_api:
-    repository: "soedinglab/mmseqs2-app-backend"
+    repository: "harbor.devops.k8s.rcsb.org/dockerhub/soedinglab/mmseqs2-app-backend"
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
     #tag: ""
   web_worker:
-    repository: "soedinglab/mmseqs2-app-backend"
+    repository: "harbor.devops.k8s.rcsb.org/dockerhub/soedinglab/mmseqs2-app-backend"
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
     #tag: ""
   web_webserver:
-    repository: "soedinglab/mmseqs2-app-frontend"
+    repository: "harbor.devops.k8s.rcsb.org/dockerhub/soedinglab/mmseqs2-app-frontend"
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
     #tag: ""
@@ -124,9 +126,8 @@ resources:
       cpu: 1
       memory: 1Gi
 
-# Buildlocker URL
-buildlockerURL: "http://bl-west.rcsb.org"
-pool: "A"
+# Buildlocker Configurations
+buildlockerRegion: "west"
 
 # appConfigs defines ConfigMap resources which are mounted into the container environment as a file.
 appConfigs:
