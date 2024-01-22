@@ -75,25 +75,10 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: rutgers-acme
     kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: seqsearch.staging.k8s.rcsb.org
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-    - host: seqsearch.staging.east.k8s.rcsb.org
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-    - host: seqsearch.staging.west.k8s.rcsb.org
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls:
-    - secretName: rcsb-seqsearch-tls
-      hosts:
-        - seqsearch.staging.k8s.rcsb.org
-        - seqsearch.staging.east.k8s.rcsb.org
-        - seqsearch.staging.west.k8s.rcsb.org
+  host: seqsearch.staging.k8s.rcsb.org
+  path: /
+  pathType: ImplementationSpecific
+
 
 # Define resource limits for your application. Especially important if you enable autoscaling for this Helm chart.
 # Deploy without limits first to test the application performance, then tune afterwards to ensure that autoscaling
