@@ -28,6 +28,15 @@ spec:
         {{- include "helm_chart.selectorLabels" $ | nindent 8 }}
         rcsb.org/path: {{ . | quote }}
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "helm_chart.selectorLabels" $ | nindent 20 }}
+                topologyKey: kubernetes.io/hostname
+              weight: 1
       securityContext:
         fsGroup: 1000
       {{- with $.Values.imagePullSecrets }}
