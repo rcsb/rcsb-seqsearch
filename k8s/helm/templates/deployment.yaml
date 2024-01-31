@@ -171,15 +171,12 @@ spec:
         - name: redis-volume
           emptyDir:
             sizeLimit: {{ $.Values.ephemeralVolumes.redis_volume.sizeLimit }}
-            medium: "Memory"
         - name: databases
           emptyDir:
             sizeLimit: {{ $.Values.ephemeralVolumes.databases.sizeLimit }}
-            medium: "Memory"
         - name: jobs
           emptyDir:
             sizeLimit: {{ $.Values.ephemeralVolumes.jobs.sizeLimit }}
-            medium: "Memory"
         - name: {{ include "helm_chart.configmapName" $ }}
           configMap:
             name: {{ include "helm_chart.configmapName" $ }}
