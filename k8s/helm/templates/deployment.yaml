@@ -169,14 +169,35 @@ spec:
               subPath: "warm_up_query.sh"
       volumes:
         - name: redis-volume
-          emptyDir:
-            sizeLimit: {{ $.Values.ephemeralVolumes.redis_volume.sizeLimit }}
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - "ReadWriteMany"
+                storageClassName: {{ include "helm_chart.fullname" . }}-ephemeral
+                resources:
+                  requests:
+                    storage: {{ $.Values.ephemeralVolumes.redis_volume.sizeLimit }}
         - name: databases
-          emptyDir:
-            sizeLimit: {{ $.Values.ephemeralVolumes.databases.sizeLimit }}
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - "ReadWriteMany"
+                storageClassName: {{ include "helm_chart.fullname" . }}-ephemeral
+                resources:
+                  requests:
+                    storage: {{ $.Values.ephemeralVolumes.databases.sizeLimit }}
         - name: jobs
-          emptyDir:
-            sizeLimit: {{ $.Values.ephemeralVolumes.jobs.sizeLimit }}
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - "ReadWriteMany"
+                storageClassName: {{ include "helm_chart.fullname" . }}-ephemeral
+                resources:
+                  requests:
+                    storage: {{ $.Values.ephemeralVolumes.jobs.sizeLimit }}
         - name: {{ include "helm_chart.configmapName" $ }}
           configMap:
             name: {{ include "helm_chart.configmapName" $ }}

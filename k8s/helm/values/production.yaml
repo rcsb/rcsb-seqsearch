@@ -36,11 +36,11 @@ image:
 
 ephemeralVolumes:
   redis_volume:
-    sizeLimit: 500Mi
+    sizeLimit: 10Gi
   databases:
     sizeLimit: 60Gi
   jobs:
-    sizeLimit: 100Mi
+    sizeLimit: 10Gi
 
 deploymentStrategy:
   #https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
@@ -85,38 +85,30 @@ ingress:
 resources:
   redis:
     requests:
-      ephemeral-storage: "10Gi"
       cpu: 10m
       memory: 64Mi
     limits:
-      ephemeral-storage: "50Gi"
       cpu: 1
       memory: 1Gi
   api:
     requests:
-      ephemeral-storage: "10Gi"
       cpu: 10m
       memory: 64Mi
     limits:
-      ephemeral-storage: "50Gi"
       cpu: 1
       memory: 1Gi
   worker:
     requests:
-      ephemeral-storage: "10Gi"
       cpu: 10m
       memory: 45Gi
     limits:
-      ephemeral-storage: "50Gi"
       cpu: 1
       memory: 90Gi
   webserver:
     requests:
-      ephemeral-storage: "10Gi"
       cpu: 10m
       memory: 64Mi
     limits:
-      ephemeral-storage: "50Gi"
       cpu: 1
       memory: 1Gi
 
