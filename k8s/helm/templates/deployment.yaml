@@ -174,7 +174,7 @@ spec:
               spec:
                 accessModes:
                   - "ReadWriteMany"
-                storageClassName: {{ include "helm_chart.fullname" . }}-ephemeral
+                storageClassName: {{ include "helm_chart.fullname" $ }}-ephemeral
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.redis_volume.sizeLimit }}
@@ -184,7 +184,7 @@ spec:
               spec:
                 accessModes:
                   - "ReadWriteMany"
-                storageClassName: {{ include "helm_chart.fullname" . }}-ephemeral
+                storageClassName: {{ include "helm_chart.fullname" $ }}-ephemeral
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.databases.sizeLimit }}
@@ -194,7 +194,7 @@ spec:
               spec:
                 accessModes:
                   - "ReadWriteMany"
-                storageClassName: {{ include "helm_chart.fullname" . }}-ephemeral
+                storageClassName: {{ include "helm_chart.fullname" $ }}-ephemeral
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.jobs.sizeLimit }}
