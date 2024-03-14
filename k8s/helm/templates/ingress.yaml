@@ -23,7 +23,7 @@ spec:
             pathType: {{ .Values.ingress.pathType }}
             backend:
               service:
-                name: "http"
+                name: {{ include "helm_chart.fullname" . | quote }}
                 port:
                   number: {{ .Values.service.port }}
 {{- end }}
