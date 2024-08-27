@@ -58,7 +58,7 @@ allowVolumeExpansion: {{ .Values.rookCeph.allowVolumeExpansion }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "helm_chart.pvname" $ }}-{{ . }}-weekly-update-databases
+  name: {{ include "helm_chart.pvname" $ }}-{{ . }}
 spec:
   accessModes:
     {{- toYaml $.Values.rookCeph.pvcAccessModes | nindent 4 }}

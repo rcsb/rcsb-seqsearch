@@ -35,7 +35,7 @@ spec:
               name: {{ include "helm_chart.dbParamsName" $ }}
             {{- if $.Values.usePersistentVolume }}
             - mountPath: /opt/databases
-              name: {{ include "helm_chart.pvname" $ }}-{{ . }}-weekly-update-databases
+              name: {{ include "helm_chart.pvname" $ }}-{{ . }}
             {{- end }}
           command: ["/bin/sh", "-c"]
           args:
@@ -204,9 +204,9 @@ spec:
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.redis_volume.sizeLimit }}
-        - name: {{ include "helm_chart.pvname" $ }}-{{ . }}-weekly-update-databases
+        - name: {{ include "helm_chart.pvname" $ }}-{{ . }}
           persistentVolumeClaim:
-            claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}-weekly-update-databases
+            claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}
         - name: jobs
           ephemeral:
             volumeClaimTemplate:
