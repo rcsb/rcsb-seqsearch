@@ -1,16 +1,15 @@
 {{- range tuple "a" "b" }}
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "helm_chart.fullname" $ }}-{{ . }}
   labels:
     {{- include "helm_chart.labels" $ | nindent 4 }}
     rcsb.org/path: {{ . | quote }}
 spec:
-  {{- if not $.Values.autoscaling.enabled }}
   replicas: {{ $.Values.replicaCount }}
-  {{- end }}
+  revisionHistoryLimit: {{ $.Values.revisionHistoryLimit}}
   selector:
     matchLabels:
       {{- include "helm_chart.selectorLabels" $ | nindent 6 }}
@@ -27,22 +26,6 @@ spec:
       labels:
         {{- include "helm_chart.selectorLabels" $ | nindent 8 }}
         rcsb.org/path: {{ . | quote }}
-    spec:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    {{- include "helm_chart.selectorLabels" $ | nindent 20 }}
-                topologyKey: kubernetes.io/hostname
-              weight: 1
-      securityContext:
-        fsGroup: 1000
-      {{- with $.Values.imagePullSecrets }}
-      imagePullSecrets:
-        - name: {{ . }}
-      {{- end }}
       initContainers:
         - name: database-loader
           image: busybox:1.36
@@ -50,28 +33,41 @@ spec:
           volumeMounts:
             - mountPath: /opt/database-params
               name: {{ include "helm_chart.dbParamsName" $ }}
+            {{- if $.Values.usePersistentVolume }}
             - mountPath: /opt/databases
-              name: databases
+              name: {{ include "helm_chart.pvname" $ }}-{{ . }}-weekly-update-databases
+            {{- end }}
           command: ["/bin/sh", "-c"]
           args:
             - >
-              echo "Loading DB directory";
-              cp /opt/database-params/*.params /opt/databases;
-              ls -lrt /opt/databases;
-              echo "Pulling files from buildlocker";
-              wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/pdb_protein_sequence.fasta;
-              wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_dna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/pdb_dna_sequence.fasta;
-              wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_rna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/pdb_rna_sequence.fasta;
-              wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_protein_sequence.fasta;
-              wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_dna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_dna_sequence.fasta;
-              wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_rna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_rna_sequence.fasta;
-              echo "# we create another set of databases to search in PDB + CSM sequences at the same time, this ensures comparable scores between PDB and CSM sequences";
-              cat /opt/databases/pdb_protein_sequence.fasta /opt/databases/models_protein_sequence.fasta > /opt/databases/pdb_and_models_protein_sequence.fasta;
-              cat /opt/databases/pdb_dna_sequence.fasta /opt/databases/models_dna_sequence.fasta > /opt/databases/pdb_and_models_dna_sequence.fasta;
-              cat /opt/databases/pdb_rna_sequence.fasta /opt/databases/models_rna_sequence.fasta > /opt/databases/pdb_and_models_rna_sequence.fasta;
-              chown 1000 /opt/databases/*;
-              sed -i "s/\$today/$(date -I)/g" /opt/databases/*params;
-              echo "DB files loading complete";
+              echo $POD_NAME
+              if [[ "${POD_NAME}" == *-0 ]]; then
+                echo "Loading DB directory";
+                cp /opt/database-params/*.params /opt/databases;
+                ls -lrt /opt/databases;
+                echo "Pulling files from buildlocker";
+                wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/workflow-databases/pdb_protein_sequence.fasta;
+                wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_dna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/workflow-databases/pdb_dna_sequence.fasta;
+                wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_rna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/workflow-databases/pdb_rna_sequence.fasta;
+                wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/workflow-databases/models_protein_sequence.fasta;
+                wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_dna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/workflow-databases/models_dna_sequence.fasta;
+                wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_rna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/workflow-databases/models_rna_sequence.fasta;
+                cp /opt/workflow-databases/* /opt/databases;
+                echo "# we create another set of databases to search in PDB + CSM sequences at the same time, this ensures comparable scores between PDB and CSM sequences";
+                cat /opt/databases/pdb_protein_sequence.fasta /opt/databases/models_protein_sequence.fasta > /opt/databases/pdb_and_models_protein_sequence.fasta;
+                cat /opt/databases/pdb_dna_sequence.fasta /opt/databases/models_dna_sequence.fasta > /opt/databases/pdb_and_models_dna_sequence.fasta;
+                cat /opt/databases/pdb_rna_sequence.fasta /opt/databases/models_rna_sequence.fasta > /opt/databases/pdb_and_models_rna_sequence.fasta;
+                chown 1000 /opt/databases/*;
+                sed -i "s/\$today/$(date -I)/g" /opt/databases/*params;
+                echo "DB files loading complete";
+              else
+                echo "Pod name does not end with -0; skipping database loading.";
+              fi
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name 
       containers:
         - name: mmseqs-web-redis
           image: "{{ $.Values.image.redis.repository }}:{{ $.Values.image.redis.tag | default "latest" }}"
@@ -100,6 +96,11 @@ spec:
             periodSeconds: 3
           resources:
             {{- toYaml $.Values.resources.redis | nindent 12 }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
         - name: mmseqs-web-api
           image: "{{ $.Values.image.web_api.repository }}:{{ $.Values.image.web_api.tag | default $.Chart.AppVersion }}"
           imagePullPolicy: {{ $.Values.image.web_api.pullPolicy }}
@@ -119,6 +120,11 @@ spec:
               readOnly: true
           resources:
             {{- toYaml $.Values.resources.api | nindent 12 }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name 
         - name: mmseqs-web-worker
           image: "{{ $.Values.image.web_worker.repository }}:{{ $.Values.image.web_worker.tag | default $.Chart.AppVersion }}"
           imagePullPolicy: {{ $.Values.image.web_worker.pullPolicy }}
@@ -135,6 +141,11 @@ spec:
               readOnly: true
           resources:
             {{- toYaml $.Values.resources.worker | nindent 12 }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name 
         - name: mmseqs-web-webserver
           image: "{{ $.Values.image.web_webserver.repository }}:{{ $.Values.image.web_webserver.tag | default $.Chart.AppVersion }}"
           imagePullPolicy: {{ $.Values.image.web_webserver.pullPolicy }}
@@ -155,10 +166,20 @@ spec:
             httpGet:
               port: http
               path: /api/databases
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name 
         - name: query-warmer
           image: busybox:1.36
           imagePullPolicy: Always
-          command: [ "/opt/warm_up_query.sh" ]
+          command: ["/bin/sh", "-c"]
+          args:
+            - >
+              echo $POD_NAME
+              if [[ "${POD_NAME}" == *-0 ]]; then
+                /opt/warm_up_query.sh
           volumeMounts:
             - mountPath: "/tmp/test.fasta"
               name: {{ include "helm_chart.configmapName" $ }}
@@ -167,6 +188,11 @@ spec:
             - mountPath: "/opt/warm_up_query.sh"
               name: {{ include "helm_chart.configmapName" $ }}
               subPath: "warm_up_query.sh"
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name 
       volumes:
         - name: redis-volume
           ephemeral:
@@ -178,16 +204,9 @@ spec:
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.redis_volume.sizeLimit }}
-        - name: databases
-          ephemeral:
-            volumeClaimTemplate:
-              spec:
-                accessModes:
-                  - "ReadWriteMany"
-                storageClassName: {{ include "helm_chart.fullname" $ }}-ephemeral
-                resources:
-                  requests:
-                    storage: {{ $.Values.ephemeralVolumes.databases.sizeLimit }}
+        - name: {{ include "helm_chart.pvname" $ }}-{{ . }}-weekly-update-databases
+          persistentVolumeClaim:
+            claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}-weekly-update-databases
         - name: jobs
           ephemeral:
             volumeClaimTemplate:
