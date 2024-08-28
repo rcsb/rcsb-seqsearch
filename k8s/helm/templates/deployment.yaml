@@ -14,18 +14,12 @@ spec:
     matchLabels:
       {{- include "helm_chart.selectorLabels" $ | nindent 6 }}
       rcsb.org/path: {{ . | quote }}
-  strategy:
-    type: {{ $.Values.deploymentStrategy.type }}
-    {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
-    rollingUpdate:
-      maxSurge: {{ $.Values.deploymentStrategy.maxSurge }}
-      maxUnavailable: {{ $.Values.deploymentStrategy.maxUnavailable }}
-    {{- end }}
   template:
     metadata:
       labels:
         {{- include "helm_chart.selectorLabels" $ | nindent 8 }}
         rcsb.org/path: {{ . | quote }}
+    spec:
       initContainers:
         - name: database-loader
           image: busybox:1.36
