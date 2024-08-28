@@ -41,7 +41,8 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - >
-              echo $POD_NAME
+              echo $POD_NAME;
+              
               if [ "${POD_NAME##*-}" = "0" ]; then
                 echo "Loading DB directory";
                 cp /opt/database-params/*.params /opt/databases;
