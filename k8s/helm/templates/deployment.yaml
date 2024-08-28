@@ -54,7 +54,6 @@ spec:
                 wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_protein_sequence.fasta;
                 wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_dna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_dna_sequence.fasta;
                 wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_rna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_rna_sequence.fasta;
-                cp /opt/databases/* /opt/databases;
                 echo "# we create another set of databases to search in PDB + CSM sequences at the same time, this ensures comparable scores between PDB and CSM sequences";
                 cat /opt/databases/pdb_protein_sequence.fasta /opt/databases/models_protein_sequence.fasta > /opt/databases/pdb_and_models_protein_sequence.fasta;
                 cat /opt/databases/pdb_dna_sequence.fasta /opt/databases/models_dna_sequence.fasta > /opt/databases/pdb_and_models_dna_sequence.fasta;
