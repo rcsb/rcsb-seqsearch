@@ -42,7 +42,7 @@ spec:
           args:
             - >
               echo $POD_NAME;
-              
+
               if [ "${POD_NAME##*-}" = "0" ]; then
                 echo "Loading DB directory";
                 cp /opt/database-params/*.params /opt/databases;
@@ -115,7 +115,7 @@ spec:
             - mountPath: /opt/mmseqs-web/databases
               name: {{ include "helm_chart.pvname" $ }}-{{ . }}
             - mountPath: /opt/mmseqs-web/jobs
-              name: jobs
+              name: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
             - name: {{ include "helm_chart.configmapName" $ }}
               mountPath: /etc/mmseqs-web/config.json
               subPath: config.json
@@ -136,7 +136,7 @@ spec:
             - mountPath: /opt/mmseqs-web/databases
               name: {{ include "helm_chart.pvname" $ }}-{{ . }}
             - mountPath: /opt/mmseqs-web/jobs
-              name: jobs
+              name: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
             - name: {{ include "helm_chart.configmapName" $ }}
               mountPath: /etc/mmseqs-web/config.json
               subPath: config.json
@@ -179,7 +179,7 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - >
-              echo $POD_NAME
+              echo $POD_NAME;
               if [[ "${POD_NAME}" == *-0 ]]; then
                 /opt/warm_up_query.sh
           volumeMounts:
@@ -209,16 +209,9 @@ spec:
         - name: {{ include "helm_chart.pvname" $ }}-{{ . }}
           persistentVolumeClaim:
             claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}
-        - name: jobs
-          ephemeral:
-            volumeClaimTemplate:
-              spec:
-                accessModes:
-                  - "ReadWriteMany"
-                storageClassName: {{ include "helm_chart.fullname" $ }}-ephemeral
-                resources:
-                  requests:
-                    storage: {{ $.Values.ephemeralVolumes.jobs.sizeLimit }}
+        - name: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
+          persistentVolumeClaim:
+            claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
         - name: {{ include "helm_chart.configmapName" $ }}
           configMap:
             name: {{ include "helm_chart.configmapName" $ }}

@@ -15,6 +15,7 @@ rookCeph:
   pvcAccessModes:
     - ReadWriteMany
   pvcRequestStorageSize: 60Gi
+  pvcRequestStorageSizeJobs: 10Gi
 
 # usePersistentVolume if your application requires a persistent volume resource for data storage.
 usePersistentVolume: true
