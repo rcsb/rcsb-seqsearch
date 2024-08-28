@@ -41,73 +41,27 @@ spec:
           args:
             - >
               echo $POD_NAME
-
-
               if [[ "${POD_NAME}" == *-0 ]]; then
-
-
-                  echo "Loading DB directory";
-
-
-                  cp /opt/database-params/*.params /opt/databases;
-
-
-                  ls -lrt /opt/databases;
-
-
-
-                  echo "Pulling files from buildlocker";
-
-
-
-                  wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/pdb_protein_sequence.fasta;
-
-
-                  wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_dna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/pdb_dna_sequence.fasta;
-
-
-                  wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_rna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/pdb_rna_sequence.fasta;
-
-
-                  wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_protein_sequence.fasta;
-
-
-                  wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_dna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_dna_sequence.fasta;
-
-
-                  wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_rna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_rna_sequence.fasta;
-
-
-                  cp /opt/databases/* /opt/databases;
-
-
-                  echo "# we create another set of databases to search in PDB + CSM sequences at the same time, this ensures comparable scores between PDB and CSM sequences";
-
-
-                  cat /opt/databases/pdb_protein_sequence.fasta /opt/databases/models_protein_sequence.fasta > /opt/databases/pdb_and_models_protein_sequence.fasta;
-
-
-                  cat /opt/databases/pdb_dna_sequence.fasta /opt/databases/models_dna_sequence.fasta > /opt/databases/pdb_and_models_dna_sequence.fasta;
-
-                  
-                  cat /opt/databases/pdb_rna_sequence.fasta /opt/databases/models_rna_sequence.fasta > /opt/databases/pdb_and_models_rna_sequence.fasta;
-
-
-                  chown 1000 /opt/databases/*;
-
-
-                  sed -i "s/\$today/$(date -I)/g" /opt/databases/*params;
-
-
-                  echo "DB files loading complete";
-
-
+                echo "Loading DB directory";
+                cp /opt/database-params/*.params /opt/databases;
+                ls -lrt /opt/databases;
+                echo "Pulling files from buildlocker";
+                wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/pdb_protein_sequence.fasta;
+                wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_dna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/pdb_dna_sequence.fasta;
+                wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_rna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/pdb_rna_sequence.fasta;
+                wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_protein_sequence.fasta;
+                wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_dna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_dna_sequence.fasta;
+                wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_rna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_rna_sequence.fasta;
+                cp /opt/databases/* /opt/databases;
+                echo "# we create another set of databases to search in PDB + CSM sequences at the same time, this ensures comparable scores between PDB and CSM sequences";
+                cat /opt/databases/pdb_protein_sequence.fasta /opt/databases/models_protein_sequence.fasta > /opt/databases/pdb_and_models_protein_sequence.fasta;
+                cat /opt/databases/pdb_dna_sequence.fasta /opt/databases/models_dna_sequence.fasta > /opt/databases/pdb_and_models_dna_sequence.fasta;
+                cat /opt/databases/pdb_rna_sequence.fasta /opt/databases/models_rna_sequence.fasta > /opt/databases/pdb_and_models_rna_sequence.fasta;
+                chown 1000 /opt/databases/*;
+                sed -i "s/\$today/$(date -I)/g" /opt/databases/*params;
+                echo "DB files loading complete";
               else
-
-
-                  echo "Pod name does not end with -0; skipping database loading.";
-
-                  
+                echo "Pod name does not end with -0; skipping database loading.";
               fi
           env:
             - name: POD_NAME
