@@ -30,13 +30,6 @@ spec:
         - name: database-loader
           image: busybox:1.36
           imagePullPolicy: IfNotPresent
-          volumeMounts:
-            - mountPath: /opt/database-params
-              name: {{ include "helm_chart.dbParamsName" $ }}
-            {{- if $.Values.usePersistentVolume }}
-            - mountPath: /opt/databases
-              name: {{ include "helm_chart.pvname" $ }}-{{ . }}
-            {{- end }}
           command: ["/bin/sh", "-c"]
           args:
             - >
