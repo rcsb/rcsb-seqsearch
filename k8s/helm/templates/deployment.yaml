@@ -193,6 +193,14 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name 
+      volumeClaimTemplates:
+        - metadata:
+            name: {{ include "helm_chart.pvname" $ }}-{{ . }}
+          spec:
+            accessModes: [ "ReadWriteOnce" ]
+            resources:
+              requests:
+                storage: 60Gi
       volumes:
         - name: redis-volume
           ephemeral:
