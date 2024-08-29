@@ -42,7 +42,7 @@ spec:
           args:
             - >
               echo $POD_NAME;
-              
+
               if [ "${POD_NAME##*-}" = "0" ]; then
                 echo "Loading DB directory";
                 cp /opt/database-params/*.params /opt/databases;
@@ -180,9 +180,9 @@ spec:
             - >
               echo $POD_NAME;
 
-
               if ["${POD_NAME##*-}" = "0"]; then
                 /opt/warm_up_query.sh
+              fi
           volumeMounts:
             - mountPath: "/tmp/test.fasta"
               name: {{ include "helm_chart.configmapName" $ }}
