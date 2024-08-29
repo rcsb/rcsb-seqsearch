@@ -180,7 +180,7 @@ spec:
             - >
               echo $POD_NAME;
 
-              if ["${POD_NAME##*-}" = "0"]; then
+              if [ "${POD_NAME##*-}" = "0" ]; then
                 /opt/warm_up_query.sh
               fi
           volumeMounts:
