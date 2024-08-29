@@ -182,6 +182,9 @@ spec:
 
               if [ "${POD_NAME##*-}" = "0" ]; then
                 /opt/warm_up_query.sh
+              else
+                echo "Pod name does not end with -0; skipping query warm-up.";
+                sleep 30
               fi
           volumeMounts:
             - mountPath: "/tmp/test.fasta"
