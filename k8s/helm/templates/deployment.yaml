@@ -48,7 +48,7 @@ spec:
               if [ "${POD_NAME##*-}" = "0" ]; then
                 echo "Loading DB directory";
                 ls -lrt /opt/databases;
-                rm -rf /opt/databases-workflow
+                rm -rf /opt/databases-workflow/*
                 echo "Pulling files from buildlocker";
                 wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases-workflow/pdb_protein_sequence.fasta;
                 wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_dna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases-workflow/pdb_dna_sequence.fasta;
