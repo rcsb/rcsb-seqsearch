@@ -81,6 +81,22 @@ spec:
   volumeMode: Filesystem
   resources:
     requests:
+      storage: {{ $.Values.rookCeph.pvcRequestStorageSizeJobs }}
+  storageClassName: {{ include "helm_chart.pvname" $ }}
+{{- end}}
+
+{{- range tuple "a" "b" }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "helm_chart.pvname" $ }}-{{ . }}-workflow
+spec:
+  accessModes:
+    {{- toYaml $.Values.rookCeph.pvcAccessModes | nindent 4 }}
+  volumeMode: Filesystem
+  resources:
+    requests:
       storage: {{ $.Values.rookCeph.pvcRequestStorageSize }}
   storageClassName: {{ include "helm_chart.pvname" $ }}
 {{- end}}
