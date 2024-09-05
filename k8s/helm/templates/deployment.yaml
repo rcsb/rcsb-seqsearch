@@ -323,6 +323,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name 
+      volumes:
         - name: {{ include "helm_chart.configmapName" $ }}
           configMap:
             name: {{ include "helm_chart.configmapName" $ }}
