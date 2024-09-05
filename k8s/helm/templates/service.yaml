@@ -48,7 +48,7 @@ metadata:
 spec:
   type: {{ $.Values.service.type }}
   ports:
-    - port: {{ $.Values.service.port }}
+    - port: 6379
       targetPort: http
       protocol: TCP
       name: http
@@ -68,7 +68,7 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.service.port }}
+    - port: 6379
       targetPort: http
       protocol: TCP
       name: http
