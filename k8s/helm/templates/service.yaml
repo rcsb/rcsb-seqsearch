@@ -53,8 +53,7 @@ spec:
       protocol: TCP
       name: redis
   selector:
-    app.kubernetes.io/name: {{ .Chart.Name }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "helm_chart.redisSelectorLabels" $ | nindent 4 }}
     rcsb.org/path: {{ . | quote }}
 {{- end }}
 ---
@@ -74,7 +73,7 @@ spec:
       protocol: TCP
       name: redis
   selector:
-    {{- include "helm_chart.selectorLabels" . | nindent 4 }}
+    {{- include "helm_chart.redisSelectorLabels" . | nindent 4 }}
 
 {{- range tuple "a" "b" }}
 ---
