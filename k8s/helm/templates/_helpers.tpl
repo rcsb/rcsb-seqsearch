@@ -41,7 +41,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{/*
 Redis Selector labels
 */}}
-{{- define "helm_chart.selectorLabels" -}}
+{{- define "helm_chart.redisSelectorLabels" -}}
 app.kubernetes.io/name: {{ .Chart.Name }}-redis
 app.kubernetes.io/instance: {{ .Release.Name }}-redis
 {{- end }}
