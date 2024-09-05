@@ -68,62 +68,6 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name 
       containers:
-        - name: mmseqs-web-redis
-          image: "{{ $.Values.image.redis.repository }}:{{ $.Values.image.redis.tag | default "latest" }}"
-          imagePullPolicy: {{ $.Values.image.redis.pullPolicy }}
-          ports:
-            - name: redis
-              containerPort: 6379
-          volumeMounts:
-            - mountPath: /var/lib/redis
-              name: redis-volume
-          livenessProbe:
-            tcpSocket:
-              port: redis # named port
-            initialDelaySeconds: 30
-            timeoutSeconds: 5
-            periodSeconds: 5
-            failureThreshold: 5
-            successThreshold: 1
-          readinessProbe:
-            exec:
-              command:
-                - redis-cli
-                - ping
-            initialDelaySeconds: 20
-            timeoutSeconds: 5
-            periodSeconds: 3
-          resources:
-            {{- toYaml $.Values.resources.redis | nindent 12 }}
-          env:
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-        - name: mmseqs-web-api
-          image: "{{ $.Values.image.web_api.repository }}:{{ $.Values.image.web_api.tag | default $.Chart.AppVersion }}"
-          imagePullPolicy: {{ $.Values.image.web_api.pullPolicy }}
-          command: [ "/sbin/tini" ]
-          args: [ "-s", "--", "/usr/local/bin/mmseqs-web", "-server", "-config", "/etc/mmseqs-web/config.json" ]
-          ports:
-            - name: api
-              containerPort: 3000
-          volumeMounts:
-            - mountPath: /opt/mmseqs-web/databases
-              name: {{ include "helm_chart.pvname" $ }}-{{ . }}
-            - mountPath: /opt/mmseqs-web/jobs
-              name: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
-            - name: {{ include "helm_chart.configmapName" $ }}
-              mountPath: /etc/mmseqs-web/config.json
-              subPath: config.json
-              readOnly: true
-          resources:
-            {{- toYaml $.Values.resources.api | nindent 12 }}
-          env:
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name 
         - name: mmseqs-web-worker
           image: "{{ $.Values.image.web_worker.repository }}:{{ $.Values.image.web_worker.tag | default $.Chart.AppVersion }}"
           imagePullPolicy: {{ $.Values.image.web_worker.pullPolicy }}
@@ -140,31 +84,6 @@ spec:
               readOnly: true
           resources:
             {{- toYaml $.Values.resources.worker | nindent 12 }}
-          env:
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name 
-        - name: mmseqs-web-webserver
-          image: "{{ $.Values.image.web_webserver.repository }}:{{ $.Values.image.web_webserver.tag | default $.Chart.AppVersion }}"
-          imagePullPolicy: {{ $.Values.image.web_webserver.pullPolicy }}
-          ports:
-            - containerPort: {{ $.Values.service.port }}
-              name: http
-          volumeMounts:
-            - name: {{ include "helm_chart.configmapName" $ }}
-              mountPath: /etc/nginx/conf.d/default.conf
-              subPath: nginx.conf
-              readOnly: true
-          resources:
-            {{- toYaml $.Values.resources.webserver | nindent 12 }}
-          readinessProbe:
-            initialDelaySeconds: 1440
-            timeoutSeconds: 5
-            periodSeconds: 3
-            httpGet:
-              port: http
-              path: /api/databases
           env:
             - name: POD_NAME
               valueFrom:
@@ -198,16 +117,6 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name 
       volumes:
-        - name: redis-volume
-          ephemeral:
-            volumeClaimTemplate:
-              spec:
-                accessModes:
-                  - "ReadWriteMany"
-                storageClassName: {{ include "helm_chart.fullname" $ }}-ephemeral
-                resources:
-                  requests:
-                    storage: {{ $.Values.ephemeralVolumes.redis_volume.sizeLimit }}
         - name: {{ include "helm_chart.pvname" $ }}-{{ . }}
           persistentVolumeClaim:
             claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}
@@ -224,4 +133,198 @@ spec:
         - name: {{ include "helm_chart.dbParamsName" $ }}
           configMap:
             name: {{ include "helm_chart.dbParamsName" $ }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "helm_chart.fullname" $ }}-{{ . }}-redis
+  labels:
+    {{- include "helm_chart.labels" $ | nindent 4 }}
+    rcsb.org/path: {{ . | quote }}
+spec:
+  replicas: {{ $.Values.replicaCount }}
+  revisionHistoryLimit: {{ $.Values.revisionHistoryLimit}}
+  selector:
+    matchLabels:
+      {{- include "helm_chart.selectorLabels" $ | nindent 6 }}
+      rcsb.org/path: {{ . | quote }}
+  strategy:
+    type: {{ $.Values.deploymentStrategy.type }}
+    {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ $.Values.deploymentStrategy.maxSurge }}
+      maxUnavailable: {{ $.Values.deploymentStrategy.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "helm_chart.selectorLabels" $ | nindent 8 }}
+        rcsb.org/path: {{ . | quote }}
+    spec:
+      containers:
+        - name: mmseqs-web-redis
+          image: "{{ $.Values.image.redis.repository }}:{{ $.Values.image.redis.tag | default "latest" }}"
+          imagePullPolicy: {{ $.Values.image.redis.pullPolicy }}
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            - mountPath: /var/lib/redis
+              name: redis-volume
+          livenessProbe:
+            tcpSocket:
+              port: redis # named port
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 5
+            failureThreshold: 5
+            successThreshold: 1
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 20
+            timeoutSeconds: 5
+            periodSeconds: 3
+          resources:
+            {{- toYaml $.Values.resources.redis | nindent 12 }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+      volumes:
+        - name: redis-volume
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - "ReadWriteMany"
+                storageClassName: {{ include "helm_chart.fullname" $ }}-ephemeral
+                resources:
+                  requests:
+                    storage: {{ $.Values.ephemeralVolumes.redis_volume.sizeLimit }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "helm_chart.fullname" $ }}-{{ . }}-web-api
+  labels:
+    {{- include "helm_chart.labels" $ | nindent 4 }}
+    rcsb.org/path: {{ . | quote }}
+spec:
+  replicas: {{ $.Values.replicaCount }}
+  revisionHistoryLimit: {{ $.Values.revisionHistoryLimit}}
+  selector:
+    matchLabels:
+      {{- include "helm_chart.selectorLabels" $ | nindent 6 }}
+      rcsb.org/path: {{ . | quote }}
+  strategy:
+    type: {{ $.Values.deploymentStrategy.type }}
+    {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ $.Values.deploymentStrategy.maxSurge }}
+      maxUnavailable: {{ $.Values.deploymentStrategy.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "helm_chart.selectorLabels" $ | nindent 8 }}
+        rcsb.org/path: {{ . | quote }}
+    spec:
+      containers:
+        - name: mmseqs-web-api
+          image: "{{ $.Values.image.web_api.repository }}:{{ $.Values.image.web_api.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.image.web_api.pullPolicy }}
+          command: [ "/sbin/tini" ]
+          args: [ "-s", "--", "/usr/local/bin/mmseqs-web", "-server", "-config", "/etc/mmseqs-web/config.json" ]
+          ports:
+            - name: api
+              containerPort: 3000
+          volumeMounts:
+            - mountPath: /opt/mmseqs-web/databases
+              name: {{ include "helm_chart.pvname" $ }}-{{ . }}
+            - mountPath: /opt/mmseqs-web/jobs
+              name: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
+            - name: {{ include "helm_chart.configmapName" $ }}
+              mountPath: /etc/mmseqs-web/config.json
+              subPath: config.json
+              readOnly: true
+          resources:
+            {{- toYaml $.Values.resources.api | nindent 12 }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+      volumes:
+        - name: {{ include "helm_chart.pvname" $ }}-{{ . }}
+          persistentVolumeClaim:
+            claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}
+        - name: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
+          persistentVolumeClaim:
+            claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
+        - name: {{ include "helm_chart.configmapName" $ }}
+          configMap:
+            name: {{ include "helm_chart.configmapName" $ }}
+            defaultMode: 0744
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "helm_chart.fullname" $ }}-{{ . }}-webserver
+  labels:
+    {{- include "helm_chart.labels" $ | nindent 4 }}
+    rcsb.org/path: {{ . | quote }}
+spec:
+  replicas: {{ $.Values.replicaCount }}
+  revisionHistoryLimit: {{ $.Values.revisionHistoryLimit}}
+  selector:
+    matchLabels:
+      {{- include "helm_chart.selectorLabels" $ | nindent 6 }}
+      rcsb.org/path: {{ . | quote }}
+  strategy:
+    type: {{ $.Values.deploymentStrategy.type }}
+    {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ $.Values.deploymentStrategy.maxSurge }}
+      maxUnavailable: {{ $.Values.deploymentStrategy.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "helm_chart.selectorLabels" $ | nindent 8 }}
+        rcsb.org/path: {{ . | quote }}
+    spec:
+      containers:
+        - name: mmseqs-web-webserver
+          image: "{{ $.Values.image.web_webserver.repository }}:{{ $.Values.image.web_webserver.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.image.web_webserver.pullPolicy }}
+          ports:
+            - containerPort: {{ $.Values.service.port }}
+              name: http
+          volumeMounts:
+            - name: {{ include "helm_chart.configmapName" $ }}
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: nginx.conf
+              readOnly: true
+          resources:
+            {{- toYaml $.Values.resources.webserver | nindent 12 }}
+          readinessProbe:
+            initialDelaySeconds: 1440
+            timeoutSeconds: 5
+            periodSeconds: 3
+            httpGet:
+              port: http
+              path: /api/databases
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name 
+        - name: {{ include "helm_chart.configmapName" $ }}
+          configMap:
+            name: {{ include "helm_chart.configmapName" $ }}
+            defaultMode: 0744
 {{- end }}
