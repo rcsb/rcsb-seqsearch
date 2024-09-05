@@ -158,7 +158,7 @@ appConfigs:
         },
         "redis" : {
           "network"  : "tcp",
-          "address"  : "localhost:6379",
+          "address"  : "{{ include "helm_chart.fullname" $ }}-{{ . }}-redis:6379",
           "password" : "",
           "index"    : 0
         },

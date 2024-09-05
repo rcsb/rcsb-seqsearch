@@ -3,7 +3,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "helm_chart.fullname" $ }}-{{ . }}
+  name: {{ include "helm_chart.fullname" $ }}-{{ . }}-worker
   labels:
     {{- include "helm_chart.labels" $ | nindent 4 }}
     rcsb.org/path: {{ . | quote }}
