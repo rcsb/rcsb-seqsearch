@@ -146,7 +146,7 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "localhost:3000",
+          "address"    : "production-rcsb-seqsearch-web-api-a:3000",
           "dbmanagment": false,
           "cors"       : true
         },
@@ -186,7 +186,7 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "localhost:3000",
+          "address"    : "production-rcsb-seqsearch-web-api-b:3000",
           "dbmanagment": false,
           "cors"       : true
         },
@@ -221,7 +221,7 @@ appConfigs:
           }
         }
       }
-  nginx.conf:
+  nginx-a.conf:
     value: |-
       server {
         listen 80 default;
@@ -236,7 +236,50 @@ appConfigs:
       
         location /api {
           rewrite ^/api(/.*) $1 break;
-          proxy_pass        http://production-rcsb-seqsearch-web-api:3000/;
+          proxy_pass        http://production-rcsb-seqsearch-web-api-a:3000/;
+      
+          proxy_set_header  Host             $host;
+          proxy_set_header  X-Real-IP        $remote_addr;
+          proxy_set_header  X-Forwarded-For  $proxy_add_x_forwarded_for;
+        }
+      
+        location / {
+          try_files $uri $uri/ /index.html;
+        }
+      
+        location ~* \.(js|map|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|eot|ttf)$ {
+          expires max;
+          add_header Cache-Control public;
+          log_not_found off;
+        }
+      
+        location = /favicon.ico {
+          log_not_found off;
+          access_log off;
+        }
+      
+        location = /robots.txt {
+          allow all;
+          log_not_found off;
+          access_log off;
+        }
+      }
+  nginx-b.conf:
+    value: |-
+      server {
+        listen 80 default;
+      
+        client_max_body_size 100M;
+      
+        access_log /dev/stdout;
+        error_log /dev/stdout info;
+      
+        root /var/www/mmseqs-web;
+        index index.html;
+      
+        location /api {
+          rewrite ^/api(/.*) $1 break;
+          proxy_pass        http://production-rcsb-seqsearch-web-api-b:3000/;
       
           proxy_set_header  Host             $host;
           proxy_set_header  X-Real-IP        $remote_addr;

@@ -18,24 +18,7 @@ spec:
     {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-worker
     rcsb.org/path: {{ . | quote }}
 {{- end }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "helm_chart.fullname" . }}-worker
-  annotations:
-    rcsb.org/path-operator-managed: "true"
-  labels:
-    {{- include "helm_chart.labels" . | nindent 4 }}
-spec:
-  type: {{ .Values.service.type }}
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
-      protocol: TCP
-      name: http
-  selector:
-    {{- include "helm_chart.selectorLabels" . | nindent 4 }}-worker
+
 {{- range tuple "a" "b" }}
 ---
 apiVersion: v1
@@ -55,22 +38,6 @@ spec:
   selector:
     {{- include "helm_chart.selectorLabels" $ | nindent 4 }}
 {{- end }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "helm_chart.fullname" . }}-redis
-  labels:
-    {{- include "helm_chart.labels" . | nindent 4 }}
-spec:
-  type: {{ .Values.service.type }}
-  ports:
-    - port: 6379
-      targetPort: 6379
-      protocol: TCP
-      name: redis
-  selector:
-    {{- include "helm_chart.selectorLabels" . | nindent 4 }}
 
 {{- range tuple "a" "b" }}
 ---
@@ -92,24 +59,7 @@ spec:
     {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-web-api
     rcsb.org/path: {{ . | quote }}
 {{- end }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "helm_chart.fullname" . }}-web-api
-  annotations:
-    rcsb.org/path-operator-managed: "true"
-  labels:
-    {{- include "helm_chart.labels" . | nindent 4 }}
-spec:
-  type: {{ .Values.service.type }}
-  ports:
-    - port: 3000
-      targetPort: 3000
-      protocol: TCP
-      name: api
-  selector:
-    {{- include "helm_chart.selectorLabels" . | nindent 4 }}-web-api
+
 {{- range tuple "a" "b" }}
 ---
 apiVersion: v1
@@ -130,21 +80,3 @@ spec:
     {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-webserver
     rcsb.org/path: {{ . | quote }}
 {{- end }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "helm_chart.fullname" . }}-webserver
-  annotations:
-    rcsb.org/path-operator-managed: "true"
-  labels:
-    {{- include "helm_chart.labels" . | nindent 4 }}
-spec:
-  type: {{ .Values.service.type }}
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
-      protocol: TCP
-      name: http
-  selector:
-    {{- include "helm_chart.selectorLabels" . | nindent 4 }}-webserver
