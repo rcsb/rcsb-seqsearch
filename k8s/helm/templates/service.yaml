@@ -6,7 +6,6 @@ metadata:
   name: {{ include "helm_chart.fullname" $ }}-worker-{{ . }}
   labels:
     {{- include "helm_chart.labels" $ | nindent 4 }}
-    rcsb.org/path: {{ . | quote }}
 spec:
   type: {{ $.Values.service.type }}
   ports:
@@ -16,7 +15,6 @@ spec:
       name: http
   selector:
     {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-worker
-    rcsb.org/path: {{ . | quote }}
 {{- end }}
 
 {{- range tuple "a" "b" }}
@@ -27,7 +25,6 @@ metadata:
   name: {{ include "helm_chart.fullname" $ }}-redis-{{ . }}
   labels:
     {{- include "helm_chart.labels" $ | nindent 4 }}
-    rcsb.org/path: {{ . | quote }}
 spec:
   type: {{ $.Values.service.type }}
   ports:
@@ -47,7 +44,6 @@ metadata:
   name: {{ include "helm_chart.fullname" $ }}-web-api-{{ . }}
   labels:
     {{- include "helm_chart.labels" $ | nindent 4 }}
-    rcsb.org/path: {{ . | quote }}
 spec:
   type: {{ $.Values.service.type }}
   ports:
@@ -57,7 +53,6 @@ spec:
       name: api
   selector:
     {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-web-api
-    rcsb.org/path: {{ . | quote }}
 {{- end }}
 
 {{- range tuple "a" "b" }}
@@ -68,7 +63,6 @@ metadata:
   name: {{ include "helm_chart.fullname" $ }}-webserver-{{ . }}
   labels:
     {{- include "helm_chart.labels" $ | nindent 4 }}
-    rcsb.org/path: {{ . | quote }}
 spec:
   type: {{ $.Values.service.type }}
   ports:
@@ -78,5 +72,4 @@ spec:
       name: http
   selector:
     {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-webserver
-    rcsb.org/path: {{ . | quote }}
 {{- end }}
