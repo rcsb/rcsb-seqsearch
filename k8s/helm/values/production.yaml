@@ -158,7 +158,7 @@ appConfigs:
         },
         "redis" : {
           "network"  : "tcp",
-          "address"  : "production-rcsb-seqsearch-redis-a:6379",
+          "address"  : "production-rcsb-seqsearch-a-redis:6379",
           "password" : "",
           "index"    : 0
         },
@@ -198,7 +198,7 @@ appConfigs:
         },
         "redis" : {
           "network"  : "tcp",
-          "address"  : "production-rcsb-seqsearch-redis-b:6379",
+          "address"  : "production-rcsb-seqsearch-b-redis:6379",
           "password" : "",
           "index"    : 0
         },
