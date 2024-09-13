@@ -236,7 +236,7 @@ appConfigs:
       
         location /api {
           rewrite ^/api(/.*) $1 break;
-          proxy_pass        production-rcsb-seqsearch-web-api:3000/;
+          proxy_pass        http://production-rcsb-seqsearch-web-api:3000/;
       
           proxy_set_header  Host             $host;
           proxy_set_header  X-Real-IP        $remote_addr;
