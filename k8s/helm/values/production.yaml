@@ -146,7 +146,7 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "production-rcsb-seqsearch-web-api-a:3000",
+          "address"    : "localhost:3000",
           "dbmanagment": false,
           "cors"       : true
         },
@@ -186,7 +186,7 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "production-rcsb-seqsearch-web-api-b:3000",
+          "address"    : "localhost:3000",
           "dbmanagment": false,
           "cors"       : true
         },
