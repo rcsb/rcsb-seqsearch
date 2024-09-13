@@ -158,7 +158,7 @@ appConfigs:
         },
         "redis" : {
           "network"  : "tcp",
-          "address"  : "production-rcsb-seqsearch-a-redis:6379",
+          "address"  : "production-rcsb-seqsearch-redis-a:6379",
           "password" : "",
           "index"    : 0
         },
@@ -198,7 +198,7 @@ appConfigs:
         },
         "redis" : {
           "network"  : "tcp",
-          "address"  : "production-rcsb-seqsearch-b-redis:6379",
+          "address"  : "production-rcsb-seqsearch-redis-b:6379",
           "password" : "",
           "index"    : 0
         },
@@ -236,7 +236,7 @@ appConfigs:
       
         location /api {
           rewrite ^/api(/.*) $1 break;
-          proxy_pass        http://localhost:3000/;
+          proxy_pass        production-rcsb-seqsearch-web-api:3000/;
       
           proxy_set_header  Host             $host;
           proxy_set_header  X-Real-IP        $remote_addr;

@@ -3,7 +3,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "helm_chart.fullname" $ }}-{{ . }}-worker
+  name: {{ include "helm_chart.fullname" $ }}-worker-{{ . }}
   labels:
     {{- include "helm_chart.labels" $ | nindent 4 }}
     rcsb.org/path: {{ . | quote }}
@@ -41,7 +41,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "helm_chart.fullname" $ }}-{{ . }}-redis
+  name: {{ include "helm_chart.fullname" $ }}-redis-{{ . }}
   labels:
     {{- include "helm_chart.labels" $ | nindent 4 }}
     rcsb.org/path: {{ . | quote }}
@@ -77,7 +77,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "helm_chart.fullname" $ }}-{{ . }}-web-api
+  name: {{ include "helm_chart.fullname" $ }}-web-api-{{ . }}
   labels:
     {{- include "helm_chart.labels" $ | nindent 4 }}
     rcsb.org/path: {{ . | quote }}
@@ -85,9 +85,9 @@ spec:
   type: {{ $.Values.service.type }}
   ports:
     - port: {{ $.Values.service.port }}
-      targetPort: http
-      protocol: TCP
-      name: http
+      targetPort: 3000
+      protocol: 3000
+      name: api
   selector:
     {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-web-api
     rcsb.org/path: {{ . | quote }}
@@ -105,9 +105,9 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: http
-      protocol: TCP
-      name: http
+      targetPort: 3000
+      protocol: 3000
+      name: api
   selector:
     {{- include "helm_chart.selectorLabels" . | nindent 4 }}-web-api
 {{- range tuple "a" "b" }}
@@ -115,7 +115,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "helm_chart.fullname" $ }}-{{ . }}-webserver
+  name: {{ include "helm_chart.fullname" $ }}-webserver-{{ . }}
   labels:
     {{- include "helm_chart.labels" $ | nindent 4 }}
     rcsb.org/path: {{ . | quote }}
