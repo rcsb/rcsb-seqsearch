@@ -84,9 +84,9 @@ metadata:
 spec:
   type: {{ $.Values.service.type }}
   ports:
-    - port: {{ $.Values.service.port }}
+    - port: 3000
       targetPort: 3000
-      protocol: 3000
+      protocol: TCP
       name: api
   selector:
     {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-web-api
@@ -104,9 +104,9 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.service.port }}
+    - port: 3000
       targetPort: 3000
-      protocol: 3000
+      protocol: TCP
       name: api
   selector:
     {{- include "helm_chart.selectorLabels" . | nindent 4 }}-web-api
