@@ -38,13 +38,6 @@ app.kubernetes.io/name: {{ .Chart.Name }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
-{{/*
-Redis Selector labels
-*/}}
-{{- define "helm_chart.redisSelectorLabels" -}}
-app.kubernetes.io/name: {{ .Chart.Name }}-redis
-app.kubernetes.io/instance: {{ .Release.Name }}-redis
-{{- end }}
 
 {{/*
 Persistent volume name. Utilize namespace aware naming to allow deployments of cluster resources for different environments.

@@ -141,7 +141,7 @@ buildlockerRegion: "west"
 
 # appConfigs defines ConfigMap resources which are mounted into the container environment as a file.
 appConfigs:
-  config.json:
+  config-a.json:
     value: |-
       {
         "verbose": true,
@@ -158,7 +158,47 @@ appConfigs:
         },
         "redis" : {
           "network"  : "tcp",
-          "address"  : "production-rcsb-seqsearch-redis:6379",
+          "address"  : "production-rcsb-seqsearch-redis-a:6379",
+          "password" : "",
+          "index"    : 0
+        },
+        "mail" : {
+          "type"      : "null",
+          "sender"    : "mail@example.org",
+          "templates" : {
+            "success" : {
+              "subject" : "Done -- %s",
+              "body"    : "Dear User,\nThe results of your submitted job are available now at https://search.mmseqs.com/queue/%s .\n"
+            },
+            "timeout" : {
+              "subject" : "Timeout -- %s",
+              "body"    : "Dear User,\nYour submitted job timed out. More details are available at https://search.mmseqs.com/queue/%s .\nPlease adjust the job and submit it again.\n"
+            },
+            "error"   : {
+              "subject" : "Error -- %s",
+              "body"    : "Dear User,\nYour submitted job failed. More details are available at https://search.mmseqs.com/queue/%s .\nPlease submit your job later again.\n"
+            }
+          }
+        }
+      }
+  config-b.json:
+    value: |-
+      {
+        "verbose": true,
+        "server" : {
+          "address"    : "localhost:3000",
+          "dbmanagment": false,
+          "cors"       : true
+        },
+        "paths" : {
+          "databases"    : "/opt/mmseqs-web/databases",
+          "results"      : "/opt/mmseqs-web/jobs",
+          "temporary"    : "/tmp",
+          "mmseqs"       : "/usr/local/bin/mmseqs"
+        },
+        "redis" : {
+          "network"  : "tcp",
+          "address"  : "production-rcsb-seqsearch-redis-b:6379",
           "password" : "",
           "index"    : 0
         },

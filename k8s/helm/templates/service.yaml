@@ -53,16 +53,13 @@ spec:
       protocol: TCP
       name: redis
   selector:
-    {{- include "helm_chart.redisSelectorLabels" $ | nindent 4 }}
-    rcsb.org/path: {{ . | quote }}
+    {{- include "helm_chart.selectorLabels" $ | nindent 4 }}
 {{- end }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "helm_chart.fullname" . }}-redis
-  annotations:
-    rcsb.org/path-operator-managed: "true"
   labels:
     {{- include "helm_chart.labels" . | nindent 4 }}
 spec:
@@ -73,7 +70,7 @@ spec:
       protocol: TCP
       name: redis
   selector:
-    {{- include "helm_chart.redisSelectorLabels" . | nindent 4 }}
+    {{- include "helm_chart.selectorLabels" . | nindent 4 }}
 
 {{- range tuple "a" "b" }}
 ---
