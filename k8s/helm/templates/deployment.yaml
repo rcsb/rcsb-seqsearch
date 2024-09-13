@@ -3,17 +3,17 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "helm_chart.fullname" $ }}-{{ . }}-worker
+  name: {{ include "helm_chart.fullname" $ }}-worker-{{ . }}
   labels:
-    {{- include "helm_chart.labels" $ | nindent 4 }}
-    rcsb.org/path: {{ . | quote }}
+    app.kubernetes.io/instance: production-rcsb-seqsearch-worker-{{ . }}
+    app.kubernetes.io/name: rcsb-seqsearch
 spec:
   replicas: {{ $.Values.replicaCount }}
   revisionHistoryLimit: {{ $.Values.revisionHistoryLimit}}
   selector:
     matchLabels:
-      {{- include "helm_chart.selectorLabels" $ | nindent 6 }}
-      rcsb.org/path: {{ . | quote }}
+      app.kubernetes.io/instance: production-rcsb-seqsearch-worker-{{ . }}
+      app.kubernetes.io/name: rcsb-seqsearch
   strategy:
     type: {{ $.Values.deploymentStrategy.type }}
     {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
@@ -24,8 +24,8 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "helm_chart.selectorLabels" $ | nindent 8 }}
-        rcsb.org/path: {{ . | quote }}
+        app.kubernetes.io/instance: production-rcsb-seqsearch-worker-{{ . }}
+        app.kubernetes.io/name: rcsb-seqsearch
     spec:
       initContainers:
         - name: database-loader
@@ -137,17 +137,17 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "helm_chart.fullname" $ }}-{{ . }}-redis
+  name: {{ include "helm_chart.fullname" $ }}-redis-{{ . }}
   labels:
-    {{- include "helm_chart.labels" $ | nindent 4 }}
-    rcsb.org/path: {{ . | quote }}
+    app.kubernetes.io/instance: production-rcsb-seqsearch-redis-{{ . }}
+    app.kubernetes.io/name: rcsb-seqsearch
 spec:
   replicas: {{ $.Values.replicaCount }}
   revisionHistoryLimit: {{ $.Values.revisionHistoryLimit}}
   selector:
     matchLabels:
-      {{- include "helm_chart.selectorLabels" $ | nindent 6 }}
-      rcsb.org/path: {{ . | quote }}
+      app.kubernetes.io/instance: production-rcsb-seqsearch-redis-{{ . }}
+      app.kubernetes.io/name: rcsb-seqsearch
   strategy:
     type: {{ $.Values.deploymentStrategy.type }}
     {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
@@ -158,8 +158,8 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "helm_chart.selectorLabels" $ | nindent 8 }}
-        rcsb.org/path: {{ . | quote }}
+        app.kubernetes.io/instance: production-rcsb-seqsearch-redis-{{ . }}
+        app.kubernetes.io/name: rcsb-seqsearch
     spec:
       containers:
         - name: mmseqs-web-redis
@@ -209,17 +209,17 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "helm_chart.fullname" $ }}-{{ . }}-web-api
+  name: {{ include "helm_chart.fullname" $ }}-web-api-{{ . }}
   labels:
-    {{- include "helm_chart.labels" $ | nindent 4 }}
-    rcsb.org/path: {{ . | quote }}
+    app.kubernetes.io/instance: production-rcsb-seqsearch-web-api-{{ . }}
+    app.kubernetes.io/name: rcsb-seqsearch
 spec:
   replicas: {{ $.Values.replicaCount }}
   revisionHistoryLimit: {{ $.Values.revisionHistoryLimit}}
   selector:
     matchLabels:
-      {{- include "helm_chart.selectorLabels" $ | nindent 6 }}
-      rcsb.org/path: {{ . | quote }}
+      app.kubernetes.io/instance: production-rcsb-seqsearch-web-api-{{ . }}
+      app.kubernetes.io/name: rcsb-seqsearch
   strategy:
     type: {{ $.Values.deploymentStrategy.type }}
     {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
@@ -230,8 +230,8 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "helm_chart.selectorLabels" $ | nindent 8 }}
-        rcsb.org/path: {{ . | quote }}
+        app.kubernetes.io/instance: production-rcsb-seqsearch-web-api-{{ . }}
+        app.kubernetes.io/name: rcsb-seqsearch
     spec:
       containers:
         - name: mmseqs-web-api
@@ -273,17 +273,17 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "helm_chart.fullname" $ }}-{{ . }}-webserver
+  name: {{ include "helm_chart.fullname" $ }}-webserver-{{ . }}
   labels:
-    {{- include "helm_chart.labels" $ | nindent 4 }}
-    rcsb.org/path: {{ . | quote }}
+    app.kubernetes.io/instance: production-rcsb-seqsearch-webserver-{{ . }}
+    app.kubernetes.io/name: rcsb-seqsearch
 spec:
   replicas: {{ $.Values.replicaCount }}
   revisionHistoryLimit: {{ $.Values.revisionHistoryLimit}}
   selector:
     matchLabels:
-      {{- include "helm_chart.selectorLabels" $ | nindent 6 }}
-      rcsb.org/path: {{ . | quote }}
+      app.kubernetes.io/instance: production-rcsb-seqsearch-webserver-{{ . }}
+      app.kubernetes.io/name: rcsb-seqsearch
   strategy:
     type: {{ $.Values.deploymentStrategy.type }}
     {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
@@ -294,8 +294,8 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "helm_chart.selectorLabels" $ | nindent 8 }}
-        rcsb.org/path: {{ . | quote }}
+        app.kubernetes.io/instance: production-rcsb-seqsearch-webserver-{{ . }}
+        app.kubernetes.io/name: rcsb-seqsearch
     spec:
       containers:
         - name: mmseqs-web-webserver
