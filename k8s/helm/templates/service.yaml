@@ -47,7 +47,7 @@ kind: Service
 metadata:
   name: {{ include "helm_chart.fullname" $ }}-web-api-{{ . }}
   labels:
-    app.kubernetes.io/instance: production-rcsb-seqsearch-rweb-api-{{ . }}
+    app.kubernetes.io/instance: production-rcsb-seqsearch-web-api-{{ . }}
     app.kubernetes.io/name: rcsb-seqsearch
 spec:
   type: {{ $.Values.service.type }}

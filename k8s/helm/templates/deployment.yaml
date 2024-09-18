@@ -14,6 +14,7 @@ spec:
     matchLabels:
       app.kubernetes.io/instance: production-rcsb-seqsearch-worker-{{ . }}
       app.kubernetes.io/name: rcsb-seqsearch
+  serviceName: production-rcsb-seqsearch-worker-{{ . }}
   strategy:
     type: {{ $.Values.deploymentStrategy.type }}
     {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
@@ -148,6 +149,7 @@ spec:
     matchLabels:
       app.kubernetes.io/instance: production-rcsb-seqsearch-redis-{{ . }}
       app.kubernetes.io/name: rcsb-seqsearch
+  serviceName: production-rcsb-seqsearch-redis-{{ . }}
   strategy:
     type: {{ $.Values.deploymentStrategy.type }}
     {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
@@ -220,6 +222,7 @@ spec:
     matchLabels:
       app.kubernetes.io/instance: production-rcsb-seqsearch-web-api-{{ . }}
       app.kubernetes.io/name: rcsb-seqsearch
+  serviceName: production-rcsb-seqsearch-web-api-{{ . }}
   strategy:
     type: {{ $.Values.deploymentStrategy.type }}
     {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
@@ -284,6 +287,7 @@ spec:
     matchLabels:
       app.kubernetes.io/instance: production-rcsb-seqsearch-webserver-{{ . }}
       app.kubernetes.io/name: rcsb-seqsearch
+  serviceName: production-rcsb-seqsearch-webserver-{{ . }}
   strategy:
     type: {{ $.Values.deploymentStrategy.type }}
     {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
