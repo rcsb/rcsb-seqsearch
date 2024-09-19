@@ -146,7 +146,7 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "localhost:3000",
+          "address"    : "0.0.0.0:3000",
           "dbmanagment": false,
           "cors"       : false
         },
@@ -186,7 +186,7 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "localhost:3000",
+          "address"    : "0.0.0.0:3000",
           "dbmanagment": false,
           "cors"       : false
         },
