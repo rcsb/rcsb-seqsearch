@@ -106,7 +106,7 @@ spec:
               readOnly: true
             - mountPath: "/opt/warm_up_query.sh"
               name: {{ include "helm_chart.configmapName" $ }}
-              subPath: "warm_up_query.sh"
+              subPath: "warm_up_query-{{ . }}.sh"
           env:
             - name: POD_NAME
               valueFrom:
