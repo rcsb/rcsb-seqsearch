@@ -317,7 +317,7 @@ appConfigs:
       # Warm up seqsearch service with one query. For some reason the first query is always very slow (which makes arches time out on it). This guarantees that users don't see that problem.
       echo "# Will now warm up the server with 1 query. This will take 25 minutes"
       sleep 1440  # give time for server to init indices
-      wget --post-data "q=@/tmp/test.fasta&mode=accept&database[]=pdb_and_models_protein_sequence" http://localhost/api/ticket
+      wget --post-data "q=@/tmp/test.fasta&mode=accept&database[]=pdb_and_models_protein_sequence" http://production-rcsb-seqsearch-webserver-a/api/ticket
       sleep 60  # give time for query to execute. There's no need to look at results, just let it execute
       echo "# Done warming up"
       sleep 86400 # Sleep for 1 day before stopping and having container restart
