@@ -146,9 +146,9 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "localhost:3000",
+          "address"    : "0.0.0.0:3000",
           "dbmanagment": false,
-          "cors"       : false
+          "cors"       : true
         },
         "paths" : {
           "databases"    : "/opt/mmseqs-web/databases",
@@ -186,9 +186,9 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "localhost:3000",
+          "address"    : "0.0.0.0:3000",
           "dbmanagment": false,
-          "cors"       : false
+          "cors"       : true
         },
         "paths" : {
           "databases"    : "/opt/mmseqs-web/databases",
