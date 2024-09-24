@@ -52,7 +52,7 @@ spec:
   ports:
     - port: 80
       targetPort: 3000
-      protocol: TCP
+      protocol: http
       name: api
   selector:
     app.kubernetes.io/instance: production-rcsb-seqsearch-web-api-{{ . }}
