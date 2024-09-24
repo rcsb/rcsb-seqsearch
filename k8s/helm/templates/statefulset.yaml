@@ -59,9 +59,6 @@ spec:
           configMap:
             name: {{ include "helm_chart.configmapName" $ }}
             defaultMode: 0744
-        - name: {{ include "helm_chart.dbParamsName" $ }}
-          configMap:
-            name: {{ include "helm_chart.dbParamsName" $ }}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -257,6 +254,9 @@ spec:
           configMap:
             name: {{ include "helm_chart.configmapName" $ }}
             defaultMode: 0744
+        - name: {{ include "helm_chart.dbParamsName" $ }}
+          configMap:
+            name: {{ include "helm_chart.dbParamsName" $ }}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
