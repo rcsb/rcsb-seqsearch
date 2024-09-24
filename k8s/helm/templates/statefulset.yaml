@@ -3,6 +3,136 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
+  name: {{ include "helm_chart.fullname" $ }}-worker-{{ . }}
+  labels:
+    app.kubernetes.io/instance: production-rcsb-seqsearch-worker-{{ . }}
+    app.kubernetes.io/name: rcsb-seqsearch
+spec:
+  replicas: {{ $.Values.replicaCount }}
+  revisionHistoryLimit: {{ $.Values.revisionHistoryLimit}}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: production-rcsb-seqsearch-worker-{{ . }}
+      app.kubernetes.io/name: rcsb-seqsearch
+  serviceName: production-rcsb-seqsearch-worker-{{ . }}
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: production-rcsb-seqsearch-worker-{{ . }}
+        app.kubernetes.io/name: rcsb-seqsearch
+    spec:
+      initContainers:
+        - name: database-loader
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - mountPath: /opt/database-params
+              name: {{ include "helm_chart.dbParamsName" $ }}
+            {{- if $.Values.usePersistentVolume }}
+            - mountPath: /opt/databases
+              name: {{ include "helm_chart.pvname" $ }}-{{ . }}
+            - mountPath: /opt/databases-workflow
+              name: {{ include "helm_chart.pvname" $ }}-{{ . }}-workflow
+            {{- end }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - >
+              echo $POD_NAME;
+
+              if [ "${POD_NAME##*-}" = "0" ]; then
+                echo "Loading DB directory";
+                cp /opt/database-params/*.params /opt/databases
+                ls -lrt /opt/databases;
+                ls -lrt /opt/databases-workflow;
+                cp -r /opt/databases-workflow/* /opt/databases/
+                echo "copying files from workflow volumne";
+                echo "# we create another set of databases to search in PDB + CSM sequences at the same time, this ensures comparable scores between PDB and CSM sequences";
+                cat /opt/databases/pdb_protein_sequence.fasta /opt/databases/models_protein_sequence.fasta > /opt/databases/pdb_and_models_protein_sequence.fasta;
+                cat /opt/databases/pdb_dna_sequence.fasta /opt/databases/models_dna_sequence.fasta > /opt/databases/pdb_and_models_dna_sequence.fasta;
+                cat /opt/databases/pdb_rna_sequence.fasta /opt/databases/models_rna_sequence.fasta > /opt/databases/pdb_and_models_rna_sequence.fasta;
+                chown 1000 /opt/databases/*;
+                sed -i "s/\$today/$(date -I)/g" /opt/databases/*params;
+                echo "DB files loading complete";
+              else
+                echo "Pod name does not end with -0; skipping database loading.";
+              fi
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name 
+      containers:
+        - name: mmseqs-web-worker
+          image: "{{ $.Values.image.web_worker.repository }}:{{ $.Values.image.web_worker.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.image.web_worker.pullPolicy }}
+          command: [ "/sbin/tini" ]
+          args: [ "-s", "--", "/usr/local/bin/mmseqs-web", "-worker", "-config", "/etc/mmseqs-web/config.json" ]
+          volumeMounts:
+            - mountPath: /opt/mmseqs-web/databases
+              name: {{ include "helm_chart.pvname" $ }}-{{ . }}
+            - mountPath: /opt/mmseqs-web/jobs
+              name: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
+            - name: {{ include "helm_chart.configmapName" $ }}
+              mountPath: /etc/mmseqs-web/config.json
+              subPath: config-{{ . }}.json
+              readOnly: true
+          resources:
+            {{- toYaml $.Values.resources.worker | nindent 12 }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name 
+        - name: query-warmer
+          image: busybox:1.36
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c"]
+          args:
+            - >
+              echo $POD_NAME;
+
+              if [ "${POD_NAME##*-}" = "0" ]; then
+                /opt/warm_up_query.sh
+              else
+                echo "Pod name does not end with -0; skipping query-warmer.";
+                sleep 86400
+              fi
+          volumeMounts:
+            - mountPath: "/tmp/test.fasta"
+              name: {{ include "helm_chart.configmapName" $ }}
+              subPath: "test.fasta"
+              readOnly: true
+            - mountPath: "/opt/warm_up_query.sh"
+              name: {{ include "helm_chart.configmapName" $ }}
+              subPath: "warm_up_query.sh"
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name 
+      volumes:
+        - name: {{ include "helm_chart.pvname" $ }}-{{ . }}
+          persistentVolumeClaim:
+            claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}
+        - name: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
+          persistentVolumeClaim:
+            claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
+        - name: {{ include "helm_chart.pvname" $ }}-{{ . }}-workflow
+          persistentVolumeClaim:
+            claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}-workflow
+        - name: {{ include "helm_chart.configmapName" $ }}
+          configMap:
+            name: {{ include "helm_chart.configmapName" $ }}
+            defaultMode: 0744
+        - name: {{ include "helm_chart.dbParamsName" $ }}
+          configMap:
+            name: {{ include "helm_chart.dbParamsName" $ }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
   name: {{ include "helm_chart.fullname" $ }}-redis-{{ . }}
   labels:
     app.kubernetes.io/instance: production-rcsb-seqsearch-redis-{{ . }}
@@ -91,46 +221,6 @@ spec:
         app.kubernetes.io/instance: production-rcsb-seqsearch-web-api-{{ . }}
         app.kubernetes.io/name: rcsb-seqsearch
     spec:
-      initContainers:
-        - name: database-loader
-          image: busybox:1.36
-          imagePullPolicy: IfNotPresent
-          volumeMounts:
-            - mountPath: /opt/database-params
-              name: {{ include "helm_chart.dbParamsName" $ }}
-            {{- if $.Values.usePersistentVolume }}
-            - mountPath: /opt/databases
-              name: {{ include "helm_chart.pvname" $ }}-{{ . }}
-            - mountPath: /opt/databases-workflow
-              name: {{ include "helm_chart.pvname" $ }}-{{ . }}-workflow
-            {{- end }}
-          command: ["/bin/sh", "-c"]
-          args:
-            - >
-              echo $POD_NAME;
-
-              if [ "${POD_NAME##*-}" = "0" ]; then
-                echo "Loading DB directory";
-                cp /opt/database-params/*.params /opt/databases
-                ls -lrt /opt/databases;
-                ls -lrt /opt/databases-workflow;
-                cp -r /opt/databases-workflow/* /opt/databases/
-                echo "copying files from workflow volumne";
-                echo "# we create another set of databases to search in PDB + CSM sequences at the same time, this ensures comparable scores between PDB and CSM sequences";
-                cat /opt/databases/pdb_protein_sequence.fasta /opt/databases/models_protein_sequence.fasta > /opt/databases/pdb_and_models_protein_sequence.fasta;
-                cat /opt/databases/pdb_dna_sequence.fasta /opt/databases/models_dna_sequence.fasta > /opt/databases/pdb_and_models_dna_sequence.fasta;
-                cat /opt/databases/pdb_rna_sequence.fasta /opt/databases/models_rna_sequence.fasta > /opt/databases/pdb_and_models_rna_sequence.fasta;
-                chown 1000 /opt/databases/*;
-                sed -i "s/\$today/$(date -I)/g" /opt/databases/*params;
-                echo "DB files loading complete";
-              else
-                echo "Pod name does not end with -0; skipping database loading.";
-              fi
-          env:
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name 
       containers:
         - name: mmseqs-web-api
           image: "{{ $.Values.image.web_api.repository }}:{{ $.Values.image.web_api.tag | default $.Chart.AppVersion }}"
@@ -156,33 +246,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-        - name: query-warmer
-          image: busybox:1.36
-          imagePullPolicy: Always
-          command: ["/bin/sh", "-c"]
-          args:
-            - >
-              echo $POD_NAME;
-
-              if [ "${POD_NAME##*-}" = "0" ]; then
-                /opt/warm_up_query.sh
-              else
-                echo "Pod name does not end with -0; skipping query-warmer.";
-                sleep 86400
-              fi
-          volumeMounts:
-            - mountPath: "/tmp/test.fasta"
-              name: {{ include "helm_chart.configmapName" $ }}
-              subPath: "test.fasta"
-              readOnly: true
-            - mountPath: "/opt/warm_up_query.sh"
-              name: {{ include "helm_chart.configmapName" $ }}
-              subPath: "warm_up_query-{{ . }}.sh"
-          env:
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name       
       volumes:
         - name: {{ include "helm_chart.pvname" $ }}-{{ . }}
           persistentVolumeClaim:
@@ -194,12 +257,6 @@ spec:
           configMap:
             name: {{ include "helm_chart.configmapName" $ }}
             defaultMode: 0744
-        - name: {{ include "helm_chart.dbParamsName" $ }}
-          configMap:
-            name: {{ include "helm_chart.dbParamsName" $ }}
-        - name: {{ include "helm_chart.pvname" $ }}-{{ . }}-workflow
-          persistentVolumeClaim:
-            claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}-workflow
 ---
 apiVersion: apps/v1
 kind: StatefulSet

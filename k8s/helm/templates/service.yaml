@@ -5,7 +5,8 @@ kind: Service
 metadata:
   name: {{ include "helm_chart.fullname" $ }}-worker-{{ . }}
   labels:
-    {{- include "helm_chart.labels" $ | nindent 4 }}-worker-{{ . }}
+    app.kubernetes.io/instance: production-rcsb-seqsearch-worker-{{ . }}
+    app.kubernetes.io/name: rcsb-seqsearch
 spec:
   type: {{ $.Values.service.type }}
   ports:
@@ -14,7 +15,8 @@ spec:
       protocol: TCP
       name: http
   selector:
-    {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-worker-{{ . }}
+    app.kubernetes.io/instance: production-rcsb-seqsearch-worker-{{ . }}
+    app.kubernetes.io/name: rcsb-seqsearch
 {{- end }}
 
 {{- range tuple "a" "b" }}
@@ -50,7 +52,7 @@ metadata:
 spec:
   type: {{ $.Values.service.type }}
   ports:
-    - port: 3000
+    - port: 80
       targetPort: 3000
       protocol: TCP
       name: api
