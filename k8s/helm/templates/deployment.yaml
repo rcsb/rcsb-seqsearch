@@ -7,7 +7,7 @@ metadata:
   labels:
     {{- include "helm_chart.labels" $ | nindent 4 }}-worker-{{ . }}
 spec:
-  replicas: {{ $.Values.replicaCount }}
+  replicas: {{ $.Values.workerReplicaCount }}
   selector:
     matchLabels:
       {{- include "helm_chart.selectorLabels" $ | nindent 6 }}-worker-{{ . }} 
