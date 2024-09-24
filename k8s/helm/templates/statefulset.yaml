@@ -295,13 +295,13 @@ spec:
               readOnly: true
           resources:
             {{- toYaml $.Values.resources.webserver | nindent 12 }}
-          readinessProbe:
-            initialDelaySeconds: 1440
-            timeoutSeconds: 5
-            periodSeconds: 3
-            httpGet:
-              port: http
-              path: /api/databases
+          # readinessProbe:
+          #   initialDelaySeconds: 1440
+          #   timeoutSeconds: 5
+          #   periodSeconds: 3
+          #   httpGet:
+          #     port: http
+          #     path: /api/databases
           env:
             - name: POD_NAME
               valueFrom:
