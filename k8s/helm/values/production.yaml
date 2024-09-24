@@ -146,7 +146,7 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "0.0.0.0:3000",
+          "address"    : "0.0.0.0:80",
           "dbmanagment": false,
           "cors"       : true
         },
@@ -186,7 +186,7 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "0.0.0.0:3000",
+          "address"    : "0.0.0.0:80",
           "dbmanagment": false,
           "cors"       : false
         },
@@ -236,7 +236,7 @@ appConfigs:
       
         location /api {
           rewrite ^/api(/.*) $1 break;
-          proxy_pass        http://production-rcsb-seqsearch-web-api-a:3000/;
+          proxy_pass        http://production-rcsb-seqsearch-web-api-a/;
       
           proxy_set_header  Host             $host;
           proxy_set_header  X-Real-IP        $remote_addr;
@@ -279,7 +279,7 @@ appConfigs:
       
         location /api {
           rewrite ^/api(/.*) $1 break;
-          proxy_pass        http://production-rcsb-seqsearch-web-api-b:3000/;
+          proxy_pass        http://production-rcsb-seqsearch-web-api-b/;
       
           proxy_set_header  Host             $host;
           proxy_set_header  X-Real-IP        $remote_addr;
