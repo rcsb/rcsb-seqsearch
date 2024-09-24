@@ -52,9 +52,6 @@ spec:
         - name: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
           persistentVolumeClaim:
             claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
-        - name: {{ include "helm_chart.pvname" $ }}-{{ . }}-workflow
-          persistentVolumeClaim:
-            claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}-workflow
         - name: {{ include "helm_chart.configmapName" $ }}
           configMap:
             name: {{ include "helm_chart.configmapName" $ }}
@@ -257,6 +254,9 @@ spec:
         - name: {{ include "helm_chart.dbParamsName" $ }}
           configMap:
             name: {{ include "helm_chart.dbParamsName" $ }}
+        - name: {{ include "helm_chart.pvname" $ }}-{{ . }}-workflow
+          persistentVolumeClaim:
+            claimName: {{ include "helm_chart.pvname" $ }}-{{ . }}-workflow
 ---
 apiVersion: apps/v1
 kind: StatefulSet
