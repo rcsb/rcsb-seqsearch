@@ -45,27 +45,6 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "helm_chart.fullname" $ }}-web-api-{{ . }}
-  labels:
-    app.kubernetes.io/instance: production-rcsb-seqsearch-web-api-{{ . }}
-    app.kubernetes.io/name: rcsb-seqsearch
-spec:
-  type: {{ $.Values.service.type }}
-  ports:
-    - port: 80
-      targetPort: 3000
-      protocol: TCP
-      name: api
-  selector:
-    app.kubernetes.io/instance: production-rcsb-seqsearch-web-api-{{ . }}
-    app.kubernetes.io/name: rcsb-seqsearch
-{{- end }}
-
-{{- range tuple "a" "b" }}
----
-apiVersion: v1
-kind: Service
-metadata:
   name: {{ include "helm_chart.fullname" $ }}-webserver-{{ . }}
   labels:
     app.kubernetes.io/instance: production-rcsb-seqsearch-webserver-{{ . }}
