@@ -75,4 +75,91 @@ spec:
         - name: {{ include "helm_chart.dbParamsName" $ }}
           configMap:
             name: {{ include "helm_chart.dbParamsName" $ }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "helm_chart.fullname" $ }}-redis-{{ . }}
+  labels:
+    app.kubernetes.io/instance: production-rcsb-seqsearch-redis-{{ . }}
+    app.kubernetes.io/name: rcsb-seqsearch
+spec:
+  replicas: {{ $.Values.workerReplicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: production-rcsb-seqsearch-redis-{{ . }}
+      app.kubernetes.io/name: rcsb-seqsearch
+  strategy:
+    type: {{ $.Values.deploymentStrategy.type }}
+    {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ $.Values.deploymentStrategy.maxSurge }}
+      maxUnavailable: {{ $.Values.deploymentStrategy.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: production-rcsb-seqsearch-redis-{{ . }}
+        app.kubernetes.io/name: rcsb-seqsearch
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/instance: production-rcsb-seqsearch-redis-{{ . }}
+                    app.kubernetes.io/name: rcsb-seqsearch
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+      securityContext:
+        fsGroup: 1000
+      imagePullSecrets:
+        - name: {{ $.Values.imagePullSecrets }}
+      containers:
+        - name: mmseqs-web-redis
+          image: "{{ $.Values.image.redis.repository }}:{{ $.Values.image.redis.tag | default "latest" }}"
+          imagePullPolicy: {{ $.Values.image.redis.pullPolicy }}
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            - mountPath: /var/lib/redis
+              name: redis-volume
+          livenessProbe:
+            tcpSocket:
+              port: redis # named port
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 5
+            failureThreshold: 5
+            successThreshold: 1
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 20
+            timeoutSeconds: 5
+            periodSeconds: 3
+          resources:
+            {{- toYaml $.Values.resources.redis | nindent 12 }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+      volumes:
+        - name: redis-volume
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - "ReadWriteMany"
+                storageClassName: {{ include "helm_chart.fullname" $ }}-ephemeral
+                resources:
+                  requests:
+                    storage: {{ $.Values.ephemeralVolumes.redis_volume.sizeLimit }}
+  
 {{- end }}

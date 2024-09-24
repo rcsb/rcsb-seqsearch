@@ -1,6 +1,6 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
-workerReplicaCount: 2
+workerReplicaCount: 1
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -239,7 +239,7 @@ appConfigs:
       
         location /api {
           rewrite ^/api(/.*) $1 break;
-          proxy_pass        http://production-rcsb-seqsearch-web-api-a:80/;
+          proxy_pass        http://production-rcsb-seqsearch-web-api-a/;
       
           proxy_set_header  Host             $host;
           proxy_set_header  X-Real-IP        $remote_addr;
@@ -282,7 +282,7 @@ appConfigs:
       
         location /api {
           rewrite ^/api(/.*) $1 break;
-          proxy_pass        http://production-rcsb-seqsearch-web-api-b:80/;
+          proxy_pass        http://production-rcsb-seqsearch-web-api-b/;
       
           proxy_set_header  Host             $host;
           proxy_set_header  X-Real-IP        $remote_addr;
