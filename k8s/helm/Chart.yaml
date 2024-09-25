@@ -5,4 +5,9 @@ description: An Helm chart for the RCSB seqsearch service
 type: application
 
 version: 0.1.0
-appVersion: "version-5"
+appVersion: "1.0.0"
+
+dependencies:
+  - name: redis
+    repository: https://charts.bitnami.com/bitnami
+    version: 17.8.5
