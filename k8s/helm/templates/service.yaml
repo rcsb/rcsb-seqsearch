@@ -5,8 +5,7 @@ kind: Service
 metadata:
   name: {{ include "helm_chart.fullname" $ }}-redis-{{ . }}
   labels:
-    app.kubernetes.io/instance: production-rcsb-seqsearch-redis-{{ . }}
-    app.kubernetes.io/name: rcsb-seqsearch
+    {{- include "helm_chart.labels" $ | nindent 4 }}-redis-{{ . }}
 spec:
   type: {{ $.Values.service.type }}
   ports:
@@ -15,8 +14,7 @@ spec:
       protocol: TCP
       name: redis
   selector:
-    app.kubernetes.io/instance: production-rcsb-seqsearch-redis-{{ . }}
-    app.kubernetes.io/name: rcsb-seqsearch
+    {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-redis-{{ . }}
 {{- end }}
 
 {{- range tuple "a" "b" }}
