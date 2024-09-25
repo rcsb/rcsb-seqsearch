@@ -168,14 +168,12 @@ kind: Deployment
 metadata:
   name: {{ include "helm_chart.fullname" $ }}-webserver-{{ . }}
   labels:
-    app.kubernetes.io/instance: production-rcsb-seqsearch-webserver-{{ . }}
-    app.kubernetes.io/name: rcsb-seqsearch
+    {{- include "helm_chart.labels" $ | nindent 4 }}-webserver-{{ . }}
 spec:
   replicas: {{ $.Values.ReplicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/instance: production-rcsb-seqsearch-webserver-{{ . }}
-      app.kubernetes.io/name: rcsb-seqsearch
+      {{- include "helm_chart.selectorLabels" $ | nindent 6 }}-webserver-{{ . }}
   strategy:
     type: {{ $.Values.deploymentStrategy.type }}
     {{- if eq $.Values.deploymentStrategy.type "RollingUpdate" }}
@@ -186,8 +184,7 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/instance: production-rcsb-seqsearch-webserver-{{ . }}
-        app.kubernetes.io/name: rcsb-seqsearch
+        {{- include "helm_chart.selectorLabels" $ | nindent 8 }}-webserver-{{ . }}
     spec:
       affinity:
         podAntiAffinity:
@@ -195,8 +192,7 @@ spec:
             - podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    app.kubernetes.io/instance: production-rcsb-seqsearch-webserver-{{ . }}
-                    app.kubernetes.io/name: rcsb-seqsearch
+                    {{- include "helm_chart.selectorLabels" $ | nindent 20 }}-webserver-{{ . }}
                 topologyKey: kubernetes.io/hostname
               weight: 1
       securityContext:
