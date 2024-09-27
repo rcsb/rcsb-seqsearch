@@ -28,21 +28,21 @@ persistentVolumeReadOnly: true
 
 redis-a:
   fullnameOverride: redis-a
-  architecture: standalone
-  auth:
-    enabled: false 
+  usePassword: false
   master:
     persistence:
-      enabled: false
+      enabled: false  
+  service:
+    type: ClusterIP 
 
 redis-b:
   fullnameOverride: redis-a
-  architecture: standalone
-  auth:
-    enabled: false 
+  usePassword: false
   master:
     persistence:
-      enabled: false
+      enabled: true  # Set this to false if persistence is not needed
+  service:
+    type: ClusterIP 
 
 # The Docker image reference which this Helm chart will run.
 image:
