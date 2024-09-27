@@ -28,9 +28,7 @@ persistentVolumeReadOnly: true
 
 redis:
   architecture: standalone 
-  usePassword: true
-  auth:
-      password: ""
+  usePassword: false
   architecture: standalone
   master:
     persistence:
