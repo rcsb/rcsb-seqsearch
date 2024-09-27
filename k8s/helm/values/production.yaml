@@ -26,23 +26,13 @@ usePersistentVolume: true
 persistentVolumeMountPath: "/opt/workflow-databases"
 persistentVolumeReadOnly: true
 
-redis-a:
-  fullnameOverride: redis-a
-  usePassword: false
+redis:
+  architecture: standalone
+  auth:
+    enabled: false 
   master:
     persistence:
-      enabled: false  
-  service:
-    type: ClusterIP 
-
-redis-b:
-  fullnameOverride: redis-a
-  usePassword: false
-  master:
-    persistence:
-      enabled: true  # Set this to false if persistence is not needed
-  service:
-    type: ClusterIP 
+      enabled: false
 
 # The Docker image reference which this Helm chart will run.
 image:
