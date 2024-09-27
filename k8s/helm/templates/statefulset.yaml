@@ -33,12 +33,15 @@ spec:
             - mountPath: /opt/databases-workflow
               name: {{ include "helm_chart.pvname" $ }}-{{ . }}-workflow
             {{- end }}
+            - mountPath: /opt/jobs
+              name: {{ include "helm_chart.pvname" $ }}-{{ . }}-jobs
           command: ["/bin/sh", "-c"]
           args:
             - >
               echo $POD_NAME;
 
               if [ "${POD_NAME##*-}" = "0" ]; then
+                rm -rf /opt/jobs/*
                 echo "Loading DB directory";
                 cp /opt/database-params/*.params /opt/databases
                 ls -lrt /opt/databases;

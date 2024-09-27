@@ -27,7 +27,6 @@ persistentVolumeMountPath: "/opt/workflow-databases"
 persistentVolumeReadOnly: true
 
 redis:
-  architecture: standalone 
   usePassword: false
   architecture: standalone
   master:
