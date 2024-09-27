@@ -33,6 +33,8 @@ redis:
   master:
     persistence:
       enabled: false
+  auth:
+    enabled: false 
 
 # The Docker image reference which this Helm chart will run.
 image:
