@@ -1,11 +1,10 @@
-{{- range tuple "a" "b" }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "helm_chart.fullname" $ }}-redis-{{ . }}
+  name: {{ include "helm_chart.fullname" $ }}-redis-b
   labels:
-    {{- include "helm_chart.labels" $ | nindent 4 }}-redis-{{ . }}
+    {{- include "helm_chart.labels" $ | nindent 4 }}-redis-b
 spec:
   type: {{ $.Values.service.type }}
   ports:
@@ -14,16 +13,16 @@ spec:
       protocol: TCP
       name: redis
   selector:
-    {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-redis-{{ . }}
-{{- end }}
+    {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-redis-b
 
+{{- range tuple "a" "b" }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "helm_chart.fullname" $ }}-web-api-b
+  name: {{ include "helm_chart.fullname" $ }}-web-api-{{ . }}
   labels:
-    {{- include "helm_chart.labels" $ | nindent 4 }}-web-api-b
+    {{- include "helm_chart.labels" $ | nindent 4 }}-web-api-{{ . }}
 spec:
   type: {{ $.Values.service.type }}
   ports:
@@ -32,7 +31,8 @@ spec:
       protocol: TCP
       name: api
   selector:
-    {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-web-api-b
+    {{- include "helm_chart.selectorLabels" $ | nindent 4 }}-web-api-{{ . }}
+{{- end }}
 
 {{- range tuple "a" "b" }}
 ---
