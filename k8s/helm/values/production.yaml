@@ -26,7 +26,15 @@ usePersistentVolume: true
 persistentVolumeMountPath: "/opt/workflow-databases"
 persistentVolumeReadOnly: true
 
-redis:
+redis-a:
+  architecture: standalone
+  auth:
+    enabled: false 
+  master:
+    persistence:
+      enabled: false
+
+redis-b:
   architecture: standalone
   auth:
     enabled: false 
