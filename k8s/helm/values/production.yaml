@@ -111,6 +111,7 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: rutgers-acme
     kubernetes.io/tls-acme: "true"
+    haproxy.org/allow-list: "132.249.210.0/24,128.6.150.0/25,132.249.213.0/24,128.6.158.0/23"
   host: seqsearch.west.k8s.rcsb.org
   path: /
   pathType: ImplementationSpecific
