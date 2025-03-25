@@ -63,12 +63,12 @@ spec:
               cp /opt/database-params/*.params /opt/databases;
               ls -lrt /opt/databases;
               echo "Pulling files from sequence-vol";
-              gzip -dc {{ $.Values.persistentVolumeMountPath }}/pdb_protein_sequence.fasta.gz" > /opt/databases/pdb_protein_sequence.fasta;
-              gzip -dc {{ $.Values.persistentVolumeMountPath }}/pdb_dna_sequence.fasta.gz" > /opt/databases/pdb_dna_sequence.fasta;
-              gzip -dc {{ $.Values.persistentVolumeMountPath }}/pdb_rna_sequence.fasta.gz" > /opt/databases/pdb_rna_sequence.fasta;
-              gzip -dc {{ $.Values.persistentVolumeMountPath }}/models_protein_sequence.fasta.gz" > /opt/databases/models_protein_sequence.fasta;
-              gzip -dc {{ $.Values.persistentVolumeMountPath }}/models_dna_sequence.fasta.gz" > /opt/databases/models_dna_sequence.fasta;
-              gzip -dc {{ $.Values.persistentVolumeMountPath }}/models_rna_sequence.fasta.gz" > /opt/databases/models_rna_sequence.fasta;
+              gzip -dc {{ $.Values.persistentVolumeMountPath }}/pdb_protein_sequence.fasta.gz > /opt/databases/pdb_protein_sequence.fasta;
+              gzip -dc {{ $.Values.persistentVolumeMountPath }}/pdb_dna_sequence.fasta.gz > /opt/databases/pdb_dna_sequence.fasta;
+              gzip -dc {{ $.Values.persistentVolumeMountPath }}/pdb_rna_sequence.fasta.gz > /opt/databases/pdb_rna_sequence.fasta;
+              gzip -dc {{ $.Values.persistentVolumeMountPath }}/models_protein_sequence.fasta.gz > /opt/databases/models_protein_sequence.fasta;
+              gzip -dc {{ $.Values.persistentVolumeMountPath }}/models_dna_sequence.fasta.gz > /opt/databases/models_dna_sequence.fasta;
+              gzip -dc {{ $.Values.persistentVolumeMountPath }}/models_rna_sequence.fasta.gz > /opt/databases/models_rna_sequence.fasta;
               echo "# we create another set of databases to search in PDB + CSM sequences at the same time, this ensures comparable scores between PDB and CSM sequences";
               cat /opt/databases/pdb_protein_sequence.fasta /opt/databases/models_protein_sequence.fasta > /opt/databases/pdb_and_models_protein_sequence.fasta;
               cat /opt/databases/pdb_dna_sequence.fasta /opt/databases/models_dna_sequence.fasta > /opt/databases/pdb_and_models_dna_sequence.fasta;
