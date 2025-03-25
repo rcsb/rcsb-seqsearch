@@ -1,39 +1,15 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
-workerReplicaCount: 1
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
 
-replicaCount: 2
-revisionHistoryLimit: 3
+replicaCount: 1
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
 
 imagePullSecrets: "harbor-docker-registry-conf"
-
-rookCeph:
-  metadataPoolSize: 3
-  dataPoolSize: 3
-  preserveFilesystemOnDelete: true
-  reclaimPolicy: Retain
-  allowVolumeExpansion: true
-  pvcAccessModes:
-    - ReadWriteMany
-  pvcRequestStorageSize: 60Gi
-  pvcRequestStorageSizeJobs: 60Gi
-
-# usePersistentVolume if your application requires a persistent volume resource for data storage.
-usePersistentVolume: true
-# persistentVolumeMountPath defines the local path within the container where the persistent volume will be mounted.
-persistentVolumeMountPath: "/opt/workflow-databases"
-persistentVolumeReadOnly: true
-
-redis:
-  usePassword: false
-  architecture: standalone
-  master:
-    persistence:
-      enabled: false
-  auth:
-    enabled: false 
 
 # The Docker image reference which this Helm chart will run.
 image:
@@ -57,18 +33,6 @@ image:
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
     #tag: ""
-
-podSecurityContext:
-  fsGroup: 1000
-  runAsNonRoot: true
-  runAsUser: 1000
-  runAsGroup: 1000
-  seccompProfile:
-    type: RuntimeDefault
-
-containerSecurityContext:
-  readOnlyRootFilesystem: true
-  allowPrivilegeEscalation: false
 
 ephemeralVolumes:
   redis_volume:
@@ -154,14 +118,14 @@ buildlockerRegion: "west"
 
 # appConfigs defines ConfigMap resources which are mounted into the container environment as a file.
 appConfigs:
-  config-a.json:
+  config.json:
     value: |-
       {
         "verbose": true,
         "server" : {
-          "address"    : "0.0.0.0:3000",
+          "address"    : "localhost:3000",
           "dbmanagment": false,
-          "cors"       : false
+          "cors"       : true
         },
         "paths" : {
           "databases"    : "/opt/mmseqs-web/databases",
@@ -171,7 +135,7 @@ appConfigs:
         },
         "redis" : {
           "network"  : "tcp",
-          "address"  : "production-rcsb-seqsearch-redis-master:6379",
+          "address"  : "localhost:6379",
           "password" : "",
           "index"    : 0
         },
@@ -194,47 +158,7 @@ appConfigs:
           }
         }
       }
-  config-b.json:
-    value: |-
-      {
-        "verbose": true,
-        "server" : {
-          "address"    : "0.0.0.0:3000",
-          "dbmanagment": false,
-          "cors"       : false
-        },
-        "paths" : {
-          "databases"    : "/opt/mmseqs-web/databases",
-          "results"      : "/opt/mmseqs-web/jobs",
-          "temporary"    : "/tmp",
-          "mmseqs"       : "/usr/local/bin/mmseqs"
-        },
-        "redis" : {
-          "network"  : "tcp",
-          "address"  : "production-rcsb-seqsearch-redis-b:6379",
-          "password" : "",
-          "index"    : 0
-        },
-        "mail" : {
-          "type"      : "null",
-          "sender"    : "mail@example.org",
-          "templates" : {
-            "success" : {
-              "subject" : "Done -- %s",
-              "body"    : "Dear User,\nThe results of your submitted job are available now at https://search.mmseqs.com/queue/%s .\n"
-            },
-            "timeout" : {
-              "subject" : "Timeout -- %s",
-              "body"    : "Dear User,\nYour submitted job timed out. More details are available at https://search.mmseqs.com/queue/%s .\nPlease adjust the job and submit it again.\n"
-            },
-            "error"   : {
-              "subject" : "Error -- %s",
-              "body"    : "Dear User,\nYour submitted job failed. More details are available at https://search.mmseqs.com/queue/%s .\nPlease submit your job later again.\n"
-            }
-          }
-        }
-      }
-  nginx-a.conf:
+  nginx.conf:
     value: |-
       server {
         listen 80 default;
@@ -249,50 +173,7 @@ appConfigs:
       
         location /api {
           rewrite ^/api(/.*) $1 break;
-          proxy_pass        http://production-rcsb-seqsearch-web-api-a/;
-      
-          proxy_set_header  Host             $host;
-          proxy_set_header  X-Real-IP        $remote_addr;
-          proxy_set_header  X-Forwarded-For  $proxy_add_x_forwarded_for;
-        }
-      
-        location / {
-          try_files $uri $uri/ /index.html;
-        }
-      
-        location ~* \.(js|map|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|eot|ttf)$ {
-          expires max;
-          add_header Cache-Control public;
-          log_not_found off;
-        }
-      
-        location = /favicon.ico {
-          log_not_found off;
-          access_log off;
-        }
-      
-        location = /robots.txt {
-          allow all;
-          log_not_found off;
-          access_log off;
-        }
-      }
-  nginx-b.conf:
-    value: |-
-      server {
-        listen 80 default;
-      
-        client_max_body_size 100M;
-      
-        access_log /dev/stdout;
-        error_log /dev/stdout info;
-      
-        root /var/www/mmseqs-web;
-        index index.html;
-      
-        location /api {
-          rewrite ^/api(/.*) $1 break;
-          proxy_pass        http://production-rcsb-seqsearch-web-api-b/;
+          proxy_pass        http://localhost:3000/;
       
           proxy_set_header  Host             $host;
           proxy_set_header  X-Real-IP        $remote_addr;
@@ -330,7 +211,7 @@ appConfigs:
       # Warm up seqsearch service with one query. For some reason the first query is always very slow (which makes arches time out on it). This guarantees that users don't see that problem.
       echo "# Will now warm up the server with 1 query. This will take 25 minutes"
       sleep 1440  # give time for server to init indices
-      wget --post-data "q=@/tmp/test.fasta&mode=accept&database[]=pdb_and_models_protein_sequence" http://production-rcsb-seqsearch-webserver-a/api/ticket
+      wget --post-data "q=@/tmp/test.fasta&mode=accept&database[]=pdb_and_models_protein_sequence" http://localhost/api/ticket
       sleep 60  # give time for query to execute. There's no need to look at results, just let it execute
       echo "# Done warming up"
       sleep 86400 # Sleep for 1 day before stopping and having container restart
