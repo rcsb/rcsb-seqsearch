@@ -42,6 +42,9 @@ ephemeralVolumes:
   jobs:
     sizeLimit: 100Mi
 
+persistentVolumeClaimName: "sequence-pvc"
+persistentVolumeMountPath: "/opt/sequences"
+
 deploymentStrategy:
   #https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
   #Type is either RollingUpdate or Recreate
@@ -120,9 +123,6 @@ resources:
       ephemeral-storage: "50Gi"
       cpu: 1
       memory: 1Gi
-
-# Buildlocker Configurations
-buildlockerRegion: "west"
 
 # appConfigs defines ConfigMap resources which are mounted into the container environment as a file.
 appConfigs:
