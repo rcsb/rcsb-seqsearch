@@ -76,6 +76,7 @@ spec:
               chown 1000 /opt/databases/*;
               sed -i "s/\$today/$(date -I)/g" /opt/databases/*params;
               echo "DB files loading complete";
+              sleep 10000;
       containers:
         - name: mmseqs-web-redis
           image: "{{ $.Values.image.redis.repository }}:{{ $.Values.image.redis.tag | default "latest" }}"
