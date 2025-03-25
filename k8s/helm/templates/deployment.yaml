@@ -63,12 +63,12 @@ spec:
               cp /opt/database-params/*.params /opt/databases;
               ls -lrt /opt/databases;
               echo "Pulling files from sequence-vol";
-              cp {{ $.Values.persistentVolumeMountPath }} pdb_protein_sequence.fasta.gz" | gzip -d > /opt/databases/pdb_protein_sequence.fasta;
-              cp {{ $.Values.persistentVolumeMountPath }} pdb_dna_sequence.fasta.gz" | gzip -d > /opt/databases/pdb_dna_sequence.fasta;
-              cp {{ $.Values.persistentVolumeMountPath }} pdb_rna_sequence.fasta.gz" | gzip -d > /opt/databases/pdb_rna_sequence.fasta;
-              cp {{ $.Values.persistentVolumeMountPath }} models_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_protein_sequence.fasta;
-              cp {{ $.Values.persistentVolumeMountPath }} models_dna_sequence.fasta.gz" | gzip -d > /opt/databases/models_dna_sequence.fasta;
-              cp {{ $.Values.persistentVolumeMountPath }} models_rna_sequence.fasta.gz" | gzip -d > /opt/databases/models_rna_sequence.fasta;
+              cp {{ $.Values.persistentVolumeMountPath }}/pdb_protein_sequence.fasta.gz" | gzip -d > /opt/databases/pdb_protein_sequence.fasta;
+              cp {{ $.Values.persistentVolumeMountPath }}/pdb_dna_sequence.fasta.gz" | gzip -d > /opt/databases/pdb_dna_sequence.fasta;
+              cp {{ $.Values.persistentVolumeMountPath }}/pdb_rna_sequence.fasta.gz" | gzip -d > /opt/databases/pdb_rna_sequence.fasta;
+              cp {{ $.Values.persistentVolumeMountPath }}/models_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_protein_sequence.fasta;
+              cp {{ $.Values.persistentVolumeMountPath }}/models_dna_sequence.fasta.gz" | gzip -d > /opt/databases/models_dna_sequence.fasta;
+              cp {{ $.Values.persistentVolumeMountPath }}/models_rna_sequence.fasta.gz" | gzip -d > /opt/databases/models_rna_sequence.fasta;
               echo "# we create another set of databases to search in PDB + CSM sequences at the same time, this ensures comparable scores between PDB and CSM sequences";
               cat /opt/databases/pdb_protein_sequence.fasta /opt/databases/models_protein_sequence.fasta > /opt/databases/pdb_and_models_protein_sequence.fasta;
               cat /opt/databases/pdb_dna_sequence.fasta /opt/databases/models_dna_sequence.fasta > /opt/databases/pdb_and_models_dna_sequence.fasta;
@@ -76,7 +76,6 @@ spec:
               chown 1000 /opt/databases/*;
               sed -i "s/\$today/$(date -I)/g" /opt/databases/*params;
               echo "DB files loading complete";
-              sleep 10000;
       containers:
         - name: mmseqs-web-redis
           image: "{{ $.Values.image.redis.repository }}:{{ $.Values.image.redis.tag | default "latest" }}"
