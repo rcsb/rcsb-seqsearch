@@ -38,7 +38,6 @@ app.kubernetes.io/name: {{ .Chart.Name }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
-
 {{/*
 Persistent volume name. Utilize namespace aware naming to allow deployments of cluster resources for different environments.
 */}}
