@@ -45,26 +45,30 @@ spec:
       {{- end }}
       initContainers:
         - name: database-loader
-          image: busybox:1.36
+          image: harbor.devops.k8s.rcsb.org/dockerhub/library/busybox:1.36
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: /opt/database-params
               name: {{ include "helm_chart.dbParamsName" $ }}
             - mountPath: /opt/databases
               name: databases
+            - mountPath: {{ $.Values.persistentVolumeMountPath }}
+              name: sequence-vol
+              subPath: work-dir/sequence_files/{{ . }}
+              readOnly: true
           command: ["/bin/sh", "-c"]
           args:
             - >
               echo "Loading DB directory";
               cp /opt/database-params/*.params /opt/databases;
               ls -lrt /opt/databases;
-              echo "Pulling files from buildlocker";
-              wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/pdb_protein_sequence.fasta;
-              wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_dna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/pdb_dna_sequence.fasta;
-              wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/pdb_rna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/pdb_rna_sequence.fasta;
-              wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_protein_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_protein_sequence.fasta;
-              wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_dna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_dna_sequence.fasta;
-              wget -O - "http://bl-{{ $.Values.buildlockerRegion | lower }}.rcsb.org/4-coastal/models_rna_sequence.fasta-{{ . | upper }}.gz" | gzip -d > /opt/databases/models_rna_sequence.fasta;
+              echo "Pulling files from sequence-vol";
+              gzip -dc {{ $.Values.persistentVolumeMountPath }}/pdb_protein_sequence.fasta.gz > /opt/databases/pdb_protein_sequence.fasta;
+              gzip -dc {{ $.Values.persistentVolumeMountPath }}/pdb_dna_sequence.fasta.gz > /opt/databases/pdb_dna_sequence.fasta;
+              gzip -dc {{ $.Values.persistentVolumeMountPath }}/pdb_rna_sequence.fasta.gz > /opt/databases/pdb_rna_sequence.fasta;
+              gzip -dc {{ $.Values.persistentVolumeMountPath }}/models_protein_sequence.fasta.gz > /opt/databases/models_protein_sequence.fasta;
+              gzip -dc {{ $.Values.persistentVolumeMountPath }}/models_dna_sequence.fasta.gz > /opt/databases/models_dna_sequence.fasta;
+              gzip -dc {{ $.Values.persistentVolumeMountPath }}/models_rna_sequence.fasta.gz > /opt/databases/models_rna_sequence.fasta;
               echo "# we create another set of databases to search in PDB + CSM sequences at the same time, this ensures comparable scores between PDB and CSM sequences";
               cat /opt/databases/pdb_protein_sequence.fasta /opt/databases/models_protein_sequence.fasta > /opt/databases/pdb_and_models_protein_sequence.fasta;
               cat /opt/databases/pdb_dna_sequence.fasta /opt/databases/models_dna_sequence.fasta > /opt/databases/pdb_and_models_dna_sequence.fasta;
@@ -198,6 +202,9 @@ spec:
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.jobs.sizeLimit }}
+        - name: sequence-vol
+          persistentVolumeClaim:
+            claimName: {{  $.Values.persistentVolumeClaimName }}
         - name: {{ include "helm_chart.configmapName" $ }}
           configMap:
             name: {{ include "helm_chart.configmapName" $ }}
