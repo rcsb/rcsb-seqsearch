@@ -160,7 +160,7 @@ spec:
               port: http
               path: /api/databases
         - name: query-warmer
-          image: busybox:1.36
+          image: busybox:1.37
           imagePullPolicy: Always
           command: [ "/opt/warm_up_query.sh" ]
           volumeMounts:
@@ -178,7 +178,7 @@ spec:
               spec:
                 accessModes:
                   - "ReadWriteMany"
-                storageClassName: {{ include "helm_chart.fullname" $ }}-ephemeral
+                storageClassName: csi-cephfs-sc
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.redis_volume.sizeLimit }}
@@ -188,7 +188,7 @@ spec:
               spec:
                 accessModes:
                   - "ReadWriteMany"
-                storageClassName: {{ include "helm_chart.fullname" $ }}-ephemeral
+                storageClassName: csi-cephfs-sc
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.databases.sizeLimit }}
@@ -198,7 +198,7 @@ spec:
               spec:
                 accessModes:
                   - "ReadWriteMany"
-                storageClassName: {{ include "helm_chart.fullname" $ }}-ephemeral
+                storageClassName: csi-cephfs-sc
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.jobs.sizeLimit }}
