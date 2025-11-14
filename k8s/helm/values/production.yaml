@@ -74,9 +74,11 @@ service:
 # ingress declares the Ingress resource to be created and allow access to the service from the external internet.
 # Set ingress.enabled to true to create this Ingress resource. Double-check the host values for your application.
 # The cookie affinity is set to keep sessions connected to the same pod
+
+
 ingress:
   enabled: true
-  className: "haproxy"
+  className: haproxy
   annotations:
     cert-manager.io/cluster-issuer: rutgers-acme
     kubernetes.io/tls-acme: "true"
@@ -86,40 +88,40 @@ ingress:
     haproxy.org/allow-list: >-
       128.6.158.0/23, 132.249.210.0/24, 132.249.213.0/24, 163.114.226.0/24, 163.114.225.0/24, 
       209.177.156.77/32, 147.75.68.120/29, 163.114.227.0/24, 163.114.228.0/24, 163.114.224.0/24, 147.75.66.200/29
-    hosts:
-      - host: seqsearch.rcsb.org
-        paths:
-          - path: /
-            pathType: ImplementationSpecific
-      - host: seqsearch-east.rcsb.org
-        paths:
-          - path: /
-            pathType: ImplementationSpecific
-      - host: seqsearch-west.rcsb.org
-        paths:
-          - path: /
-            pathType: ImplementationSpecific
-      - host: seqsearch.k8s.rcsb.org
-        paths:
-          - path: /
-            pathType: ImplementationSpecific
-      - host: seqsearch.east.k8s.rcsb.org
-        paths:
-          - path: /
-            pathType: ImplementationSpecific
-      - host: seqsearch.west.k8s.rcsb.org
-        paths:
-          - path: /
-            pathType: ImplementationSpecific
+  hosts:
+    - host: seqsearch.k8s.rcsb.org
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+    - host: seqsearch.east.k8s.rcsb.org
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+    - host: seqsearch.west.k8s.rcsb.org
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+    - host: seqsearch.rcsb.org
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+    - host: seqsearch-east.rcsb.org
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+    - host: seqsearch-west.rcsb.org
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
   tls:
     - hosts:
-        - seqsearch.rcsb.org
-        - seqsearch-east.rcsb.org
-        - seqsearch-west.rcsb.org
         - seqsearch.k8s.rcsb.org
         - seqsearch.west.k8s.rcsb.org
         - seqsearch.east.k8s.rcsb.org
-      secretName: seqsearch.rcsb.org-tls
+        - seqsearch.rcsb.org
+        - seqsearch-east.rcsb.org
+        - seqsearch-west.rcsb.org
+      secretName: seqsearch.k8s.rcsb.org
 
 # Define resource limits for your application. Especially important if you enable autoscaling for this Helm chart.
 # Deploy without limits first to test the application performance, then tune afterwards to ensure that autoscaling
