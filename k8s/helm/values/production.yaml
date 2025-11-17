@@ -38,8 +38,12 @@ image:
 ephemeralVolumes:
   redis_volume:
     sizeLimit: 10Gi
+  # This is where the sequence databases and indices are stored.
   databases:
     sizeLimit: 60Gi
+  # NOTE: mmseqs-app caches jobs in this volume. The app will go back to the volume to retrieve instead of recalculating.
+  #       These cache jobs keep accumulating, there's no cleanup in place. We had a cleanup cron in SysAmin, but it is unclear if that can be used the same way in here.
+  #       We need quite a large size so that we can cache throughout the week until the pod is restarted (which wipes the ephemeral volume).
   jobs:
     sizeLimit: 200Gi
 
@@ -248,6 +252,7 @@ appConfigs:
       # Warm up seqsearch service with one query. For some reason the first query is always very slow (which makes arches time out on it). This guarantees that users don't see that problem.
       echo "# Will now warm up the server with 1 query. This will take 25 minutes"
       sleep 1440  # give time for server to init indices
+      # NOTE (Sebastian, 2022): the following line reports 'Selected databases are not valid!' if databases are still initializing (with the service still up and running but maybe in an unhealthy state) - I've increased the wait time above to hopefully avoid that
       wget --post-data "q=@/tmp/test.fasta&mode=accept&database[]=pdb_and_models_protein_sequence" http://localhost/api/ticket
       sleep 60  # give time for query to execute. There's no need to look at results, just let it execute
       echo "# Done warming up"
