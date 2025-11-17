@@ -41,7 +41,7 @@ ephemeralVolumes:
   databases:
     sizeLimit: 60Gi
   jobs:
-    sizeLimit: 10Gi
+    sizeLimit: 200Gi
 
 persistentVolumeClaimName: "sequence-pvc"
 persistentVolumeMountPath: "/opt/sequences"
