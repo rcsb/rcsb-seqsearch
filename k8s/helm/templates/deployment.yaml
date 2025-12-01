@@ -22,7 +22,7 @@ spec:
       maxSurge: {{ $.Values.deploymentStrategy.maxSurge }}
       maxUnavailable: {{ $.Values.deploymentStrategy.maxUnavailable }}
     {{- end }}
-  progressDeadlineSeconds: 2100
+  progressDeadlineSeconds: {{ $.Values.DeploymentProgressDeadline }}
   template:
     metadata:
       labels:
