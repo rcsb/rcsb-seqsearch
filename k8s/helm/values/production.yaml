@@ -10,7 +10,7 @@ autoscaling:
   maxReplicas: 4
   targetCPUUtilizationPercentage: 80
 
-DeploymentProgressDeadline: 6300
+deploymentProgressDeadline: 6300
 
 imagePullSecrets: "harbor-docker-registry-conf"
 
