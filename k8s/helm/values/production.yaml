@@ -10,6 +10,8 @@ autoscaling:
   maxReplicas: 4
   targetCPUUtilizationPercentage: 80
 
+deploymentProgressTimeOut: 6300
+
 imagePullSecrets: "harbor-docker-registry-conf"
 
 # The Docker image reference which this Helm chart will run.
