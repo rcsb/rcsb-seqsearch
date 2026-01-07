@@ -44,10 +44,10 @@ ephemeralVolumes:
   databases:
     sizeLimit: 60Gi
   # NOTE: mmseqs-app caches jobs in this volume. The app will go back to the volume to retrieve instead of recalculating.
-  #       These cache jobs keep accumulating, there's no cleanup in place. We had a cleanup cron in SysAmin, but it is unclear if that can be used the same way in here.
-  #       We need quite a large size so that we can cache throughout the week until the pod is restarted (which wipes the ephemeral volume).
+  #       These cache jobs keep accumulating, there's no cleanup in place.
+  #       We need quite a large size so that we can hold the cache for 24h. That's because we have an actions workflow that restarts every day.
   jobs:
-    sizeLimit: 200Gi
+    sizeLimit: 50Gi
 
 persistentVolumeClaimName: "sequence-pvc"
 persistentVolumeMountPath: "/opt/sequences"
