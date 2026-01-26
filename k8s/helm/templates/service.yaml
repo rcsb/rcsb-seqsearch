@@ -8,7 +8,6 @@ metadata:
     {{- include "helm_chart.labels" $ | nindent 4 }}
     rcsb.org/path: {{ . | quote }}
 spec:
-  sessionAffinity: ClientIP
   type: {{ $.Values.service.type }}
   ports:
     - port: {{ $.Values.service.port }}
@@ -29,7 +28,6 @@ metadata:
   labels:
     {{- include "helm_chart.labels" . | nindent 4 }}
 spec:
-  sessionAffinity: ClientIP
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
