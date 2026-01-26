@@ -1,7 +1,7 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-replicaCount: 1
+replicaCount: 3
 
 # seqsearch is not a great candidate for autoscaling; it takes too long to start up.
 autoscaling:
@@ -86,6 +86,9 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: rutgers-acme
     kubernetes.io/tls-acme: "true"
+    haproxy.ingress.kubernetes.io/backend-config-snippet: |
+      stick-table type ip size 200k expire 1h
+      stick on src
     # haproxy.org/allow-list: >-
     #   128.6.158.0/23, 132.249.210.0/24, 132.249.213.0/24, 163.114.226.0/24, 163.114.225.0/24, 
     #   209.177.156.77/32, 147.75.68.120/29, 163.114.227.0/24, 163.114.228.0/24, 163.114.224.0/24, 147.75.66.200/29,
