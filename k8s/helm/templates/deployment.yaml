@@ -8,9 +8,7 @@ metadata:
     {{- include "helm_chart.labels" $ | nindent 4 }}
     rcsb.org/path: {{ . | quote }}
 spec:
-  {{- if not $.Values.autoscaling.enabled }}
   replicas: {{ $.Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "helm_chart.selectorLabels" $ | nindent 6 }}
