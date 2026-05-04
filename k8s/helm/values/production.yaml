@@ -65,12 +65,7 @@ deploymentStrategy:
 # values for all applications. Adjust as needed for your application purposes, but be aware of the security
 # implications from these changes.
 securityContext:
-  capabilities:
-    drop:
-      - ALL
   readOnlyRootFilesystem: true
-  runAsNonRoot: true
-  runAsUser: 1000
 
 # service declares the type of Service resource to be created, as well as the target port of the Pod to send requests.
 service:
