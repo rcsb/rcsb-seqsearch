@@ -3,7 +3,7 @@ name: Seqsearch Rolling Restart
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 14 * * *"  
+    - cron: "0 12 * * *"  
     - cron: "0 1 * * *"   
 
 jobs:
