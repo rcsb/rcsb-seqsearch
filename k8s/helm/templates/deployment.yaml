@@ -25,6 +25,11 @@ spec:
   progressDeadlineSeconds: {{ $.Values.deploymentProgressTimeOut }}
   template:
     metadata:
+      annotations:
+        # Roll the pods whenever the config or database params change. Without this,
+        # configmap-only merges never reach running pods (config files are subPath
+        # mounts); the old twice-daily restarts used to mask that.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
       labels:
         {{- include "helm_chart.selectorLabels" $ | nindent 8 }}
         rcsb.org/path: {{ . | quote }}
@@ -77,34 +82,28 @@ spec:
               chown 1000 /opt/databases/*;
               sed -i "s/\$today/$(date -I)/g" /opt/databases/*params;
               echo "DB files loading complete";
-      containers:
-        - name: mmseqs-web-redis
-          image: "{{ $.Values.image.redis.repository }}:{{ $.Values.image.redis.tag | default "latest" }}"
-          imagePullPolicy: {{ $.Values.image.redis.pullPolicy }}
-          ports:
-            - name: redis
-              containerPort: 6379
+        # Builds all mmseqs databases/indexes BEFORE the main containers start, so the
+        # worker never consumes shared-queue jobs for databases it does not have yet.
+        # See build_databases.sh in the values file for the full rationale.
+        - name: database-builder
+          image: "{{ $.Values.image.web_worker.repository }}:{{ $.Values.image.web_worker.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.image.web_worker.pullPolicy }}
+          command: [ "/sbin/tini" ]
+          args: [ "-s", "--", "/bin/sh", "/opt/mmseqs-web-init/build_databases.sh" ]
           volumeMounts:
-            - mountPath: /var/lib/redis
-              name: redis-volume
-          livenessProbe:
-            tcpSocket:
-              port: redis # named port
-            initialDelaySeconds: 30
-            timeoutSeconds: 5
-            periodSeconds: 5
-            failureThreshold: 5
-            successThreshold: 1
-          readinessProbe:
-            exec:
-              command:
-                - redis-cli
-                - ping
-            initialDelaySeconds: 20
-            timeoutSeconds: 5
-            periodSeconds: 3
+            - mountPath: /opt/mmseqs-web/databases
+              name: databases
+            - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
+              mountPath: /etc/mmseqs-web/config-init.json
+              subPath: config-init.json
+              readOnly: true
+            - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
+              mountPath: /opt/mmseqs-web-init/build_databases.sh
+              subPath: build_databases.sh
+              readOnly: true
           resources:
-            {{- toYaml $.Values.resources.redis | nindent 12 }}
+            {{- toYaml $.Values.resources.worker | nindent 12 }}
+      containers:
         - name: mmseqs-web-api
           image: "{{ $.Values.image.web_api.repository }}:{{ $.Values.image.web_api.tag | default $.Chart.AppVersion }}"
           imagePullPolicy: {{ $.Values.image.web_api.pullPolicy }}
@@ -118,10 +117,17 @@ spec:
               name: databases
             - mountPath: /opt/mmseqs-web/jobs
               name: jobs
-            - name: {{ include "helm_chart.configmapName" $ }}
+            - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
               mountPath: /etc/mmseqs-web/config.json
               subPath: config.json
               readOnly: true
+          # No probe here on purpose: this server listens on 127.0.0.1 only (see
+          # server.address; binding the pod IP would expose the api unproxied, bypassing
+          # nginx's upload limit), and the kubelet probes the pod IP, so httpGet and
+          # tcpSocket cannot reach it. The image has no http client for an exec probe
+          # either. The webserver's readiness probe covers this container instead: it
+          # calls the api through nginx, so a wedged api takes the pod out of the
+          # service. It cannot restart this container, though.
           resources:
             {{- toYaml $.Values.resources.api | nindent 12 }}
         - name: mmseqs-web-worker
@@ -134,7 +140,7 @@ spec:
               name: databases
             - mountPath: /opt/mmseqs-web/jobs
               name: jobs
-            - name: {{ include "helm_chart.configmapName" $ }}
+            - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
               mountPath: /etc/mmseqs-web/config.json
               subPath: config.json
               readOnly: true
@@ -147,42 +153,53 @@ spec:
             - containerPort: {{ $.Values.service.port }}
               name: http
           volumeMounts:
-            - name: {{ include "helm_chart.configmapName" $ }}
+            - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
               mountPath: /etc/nginx/conf.d/default.conf
               subPath: nginx.conf
               readOnly: true
           resources:
             {{- toYaml $.Values.resources.webserver | nindent 12 }}
           readinessProbe:
-            initialDelaySeconds: 1440
+            # A 200 from /api/databases only proves nginx and the api are alive: the
+            # endpoint lists just the databases marked COMPLETE, so a pod whose databases
+            # are half built still passes it. Assert instead that the database searches
+            # actually need is advertised, and look up a ticket, which is the cheapest
+            # call that proves the api can reach its redis (a well-formed but unknown id
+            # answers UNKNOWN; /api/databases alone reads params off disk and would pass
+            # with redis down). Databases are prebuilt by the database-builder init
+            # container, so this is usable shortly after the containers start.
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - >
+                  wget -qO- http://localhost/api/databases | grep -q '"path":"{{ $.Values.probes.requiredDatabase }}"' &&
+                  wget -qO- http://localhost/api/ticket/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA > /dev/null
+            initialDelaySeconds: 15
             timeoutSeconds: 5
-            periodSeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            # static index: restarts a wedged nginx without depending on the api
             httpGet:
               port: http
-              path: /api/databases
+              path: /
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 20
+            failureThreshold: 3
         - name: query-warmer
           image: busybox:1.37
           imagePullPolicy: Always
           command: [ "/opt/warm_up_query.sh" ]
           volumeMounts:
             - mountPath: "/tmp/test.fasta"
-              name: {{ include "helm_chart.configmapName" $ }}
+              name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
               subPath: "test.fasta"
               readOnly: true
             - mountPath: "/opt/warm_up_query.sh"
-              name: {{ include "helm_chart.configmapName" $ }}
+              name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
               subPath: "warm_up_query.sh"
       volumes:
-        - name: redis-volume
-          ephemeral:
-            volumeClaimTemplate:
-              spec:
-                accessModes:
-                  - "ReadWriteMany"
-                storageClassName: csi-cephfs-sc
-                resources:
-                  requests:
-                    storage: {{ $.Values.ephemeralVolumes.redis_volume.sizeLimit }}
         - name: databases
           ephemeral:
             volumeClaimTemplate:
@@ -193,22 +210,18 @@ spec:
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.databases.sizeLimit }}
+        # Shared by all pods of THIS path (never across paths, which hold different
+        # datasets): any pod of the path can serve any of its job's results, and the
+        # results cache survives restarts. See redis.yaml for the matching PVC.
         - name: jobs
-          ephemeral:
-            volumeClaimTemplate:
-              spec:
-                accessModes:
-                  - "ReadWriteMany"
-                storageClassName: csi-cephfs-sc
-                resources:
-                  requests:
-                    storage: {{ $.Values.ephemeralVolumes.jobs.sizeLimit }}
+          persistentVolumeClaim:
+            claimName: {{ include "helm_chart.jobsPvcName" (dict "ctx" $ "path" .) }}
         - name: sequence-vol
           persistentVolumeClaim:
             claimName: {{  $.Values.persistentVolumeClaimName }}
-        - name: {{ include "helm_chart.configmapName" $ }}
+        - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
           configMap:
-            name: {{ include "helm_chart.configmapName" $ }}
+            name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
             defaultMode: 0744
         - name: {{ include "helm_chart.dbParamsName" $ }}
           configMap:

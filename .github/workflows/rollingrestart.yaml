@@ -1,10 +1,11 @@
 name: Seqsearch Rolling Restart
 
+# Manual-only since the shared-state redesign (Aug 2026): job state lives in a shared
+# redis + jobs PVC that survives restarts, so the old twice-daily restarts no longer
+# clean anything up. Cache growth is to be handled by a dedicated cleanup job
+# (jobs PVC + redis status keys) instead.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 12 * * *"  
-    - cron: "0 1 * * *"   
 
 jobs:
   restart-k8s-seqsearch-deployment:
@@ -18,4 +19,6 @@ jobs:
       namespace: production
       region: ${{ matrix.coast }} 
       deployment_name: production-rcsb-seqsearch-${{ matrix.path }}
-      timeout: '105m'
+      # covers a full deployment restart: 3 sequential pod cycles at ~7min each
+      # (databases prebuilt in an init container since Aug 2026), plus margin
+      timeout: '45m'

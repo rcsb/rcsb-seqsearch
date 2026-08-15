@@ -1,0 +1,120 @@
+{{- range tuple "a" "b" }}
+{{- $path := . }}
+{{- $args := dict "ctx" $ "path" $path }}
+---
+# Per-path redis holding all job state (status keys, pending queue) for every pod of
+# this path. Shared within the path so any of its pods can answer any ticket poll
+# (hence no session stickiness); never shared across paths, which hold different
+# weekly datasets (see helm_chart.redisName in _helpers.tpl).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "helm_chart.redisName" $args }}
+  labels:
+    {{- include "helm_chart.labels" $ | nindent 4 }}
+    rcsb.org/path: {{ $path | quote }}
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: two redis instances must never write the same data dir
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "helm_chart.redisSelectorLabels" $args | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "helm_chart.redisSelectorLabels" $args | nindent 8 }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        - name: {{ . }}
+      {{- end }}
+      containers:
+        - name: redis
+          image: "{{ $.Values.image.redis.repository }}:{{ $.Values.image.redis.tag | default "latest" }}"
+          imagePullPolicy: {{ $.Values.image.redis.pullPolicy }}
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            # /data is where the official redis image writes its RDB snapshots
+            - mountPath: /data
+              name: redis-data
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 5
+            failureThreshold: 5
+            successThreshold: 1
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 3
+          resources:
+            {{- toYaml $.Values.resources.redis | nindent 12 }}
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: {{ include "helm_chart.redisName" $args }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "helm_chart.redisName" $args }}
+  labels:
+    {{- include "helm_chart.labels" $ | nindent 4 }}
+    rcsb.org/path: {{ $path | quote }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: redis
+      protocol: TCP
+      name: redis
+  selector:
+    {{- include "helm_chart.redisSelectorLabels" $args | nindent 4 }}
+---
+# Persistent so that job state (including the COMPLETE-status cache index) survives
+# redis pod rescheduling. Must stay consistent with this path's jobs volume: a cached
+# COMPLETE status is only valid while the matching job dir exists on that volume.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "helm_chart.redisName" $args }}
+  labels:
+    {{- include "helm_chart.labels" $ | nindent 4 }}
+    rcsb.org/path: {{ $path | quote }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: csi-cephfs-sc
+  resources:
+    requests:
+      storage: {{ $.Values.sharedState.redisVolumeSize }}
+---
+# This path's jobs volume: job inputs and results, written by whichever worker of the
+# path pops the job, readable by every pod of the path so any of them can serve any
+# /result request. Results are keyed by a hash that does not include the data version,
+# so this must never be shared with the other path.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "helm_chart.jobsPvcName" $args }}
+  labels:
+    {{- include "helm_chart.labels" $ | nindent 4 }}
+    rcsb.org/path: {{ $path | quote }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: csi-cephfs-sc
+  resources:
+    requests:
+      storage: {{ $.Values.sharedState.jobsVolumeSize }}
+{{- end }}

@@ -10,7 +10,11 @@ autoscaling:
   maxReplicas: 4
   targetCPUUtilizationPercentage: 80
 
-deploymentProgressTimeOut: 6300
+# Needs to cover one pod's startup (init database build ~5min + ~1.5min to ready,
+# measured 2026-08: ~7min total), not the whole rollout: the progress clock resets
+# every time a new pod becomes ready. Was 6300 when the in-band index build took
+# 25-30min per pod.
+deploymentProgressTimeOut: 1800
 
 imagePullSecrets: "harbor-docker-registry-conf"
 
@@ -19,8 +23,13 @@ image:
   redis:
     repository: "harbor.devops.k8s.rcsb.org/dockerhub/library/redis"
     pullPolicy: IfNotPresent
-    # Overrides the image tag whose default is the chart appVersion.
-    tag: "alpine"
+    # Pin the patch version, do NOT use a floating tag like "alpine". Nodes cache
+    # whatever a floating tag pointed at when they first pulled it, so different nodes
+    # end up running different redis versions. That was harmless while redis data was
+    # ephemeral, but now that job state is persisted an older redis can be scheduled
+    # onto the RDB written by a newer one, fail with "Can't handle RDB format version",
+    # and crash-loop, taking the whole path out of service.
+    tag: "8.8.1-alpine"
   web_api:
     repository: "harbor.devops.k8s.rcsb.org/dockerhub/soedinglab/mmseqs2-app-backend"
     pullPolicy: IfNotPresent
@@ -38,16 +47,26 @@ image:
     #tag: ""
 
 ephemeralVolumes:
-  redis_volume:
-    sizeLimit: 10Gi
   # This is where the sequence databases and indices are stored.
   databases:
     sizeLimit: 60Gi
-  # NOTE: mmseqs-app caches jobs in this volume. The app will go back to the volume to retrieve instead of recalculating.
-  #       These cache jobs keep accumulating, there's no cleanup in place.
-  #       We need quite a large size so that we can hold the cache for 24h. That's because we have an actions workflow that restarts every day.
-  jobs:
-    sizeLimit: 50Gi
+
+# Per-path shared job state: EACH path (a and b) gets its own redis (status keys +
+# pending queue) and its own RWX jobs volume (results cache), shared by all pods of that
+# path. That is what lets any pod of a path answer any ticket poll or result fetch, so no
+# client->pod stickiness is needed. State is never shared ACROSS paths: a and b hold
+# different weekly datasets and ticket ids hash only the query and database names, so a
+# common cache would serve one path's results for the other path's data.
+# NOTE: mmseqs-app caches jobs in the jobs volume and nothing cleans it up yet. Unlike
+#       the old per-pod ephemeral volumes, these SURVIVE restarts, so they grow until a
+#       cleanup job lands (planned as a separate change). Sized generously as a bridge;
+#       cleanup must delete the redis status key BEFORE the job dir (see cleanup design).
+#       That cleanup also needs a per-path flush when a path receives new data, since
+#       results cached against the previous dataset stay valid-looking otherwise.
+# Sizes are PER PATH.
+sharedState:
+  redisVolumeSize: 10Gi
+  jobsVolumeSize: 150Gi
 
 persistentVolumeClaimName: "sequence-pvc"
 persistentVolumeMountPath: "/opt/sequences"
@@ -71,10 +90,25 @@ securityContext:
 service:
   type: ClusterIP
   port: 80
+  # Which path the main service (and so the ingress) points at. MUST stay empty here:
+  # in production the path-operator injects the live path into the selector, reading it
+  # from the namespace's live-path ConfigMap, and it is switched weekly. Set this only
+  # in namespaces where the operator does not run (e.g. personal test namespaces), so
+  # that traffic still reaches exactly one path as it does in production.
+  livePath: ""
+
+probes:
+  # Database that must be advertised by the api for a pod to be considered ready.
+  # /api/databases lists only the databases whose params say COMPLETE, so requiring a
+  # named one turns a "200 OK" into a real statement about this pod being able to serve
+  # searches. Use a database that is never empty (unlike the model DNA/RNA ones, which
+  # have no sequences in some releases): this is also arches' default search target.
+  requiredDatabase: "pdb_and_models_protein_sequence"
 
 # ingress declares the Ingress resource to be created and allow access to the service from the external internet.
 # Set ingress.enabled to true to create this Ingress resource. Double-check the host values for your application.
-# The cookie affinity is set to keep sessions connected to the same pod
+# No session affinity: job state (redis + jobs volume) is shared by all pods OF A PATH,
+# so any pod of the live path can answer any request.
 
 
 ingress:
@@ -176,7 +210,7 @@ appConfigs:
         },
         "redis" : {
           "network"  : "tcp",
-          "address"  : "localhost:6379",
+          "address"  : "{{ include "helm_chart.redisName" (dict "ctx" . "path" .path) }}:6379",
           "password" : "",
           "index"    : 0
         },
@@ -199,6 +233,84 @@ appConfigs:
           }
         }
       }
+  # Config for the database-builder init container: same as config.json but with a
+  # container-local jobs dir, so the local-mode build queue never touches the shared
+  # jobs volume or redis.
+  config-init.json:
+    value: |-
+      {
+        "verbose": true,
+        "server" : {
+          "address"    : "127.0.0.1:3000",
+          "dbmanagment": false,
+          "cors"       : true
+        },
+        "paths" : {
+          "databases"    : "/opt/mmseqs-web/databases",
+          "results"      : "/tmp/init-jobs",
+          "temporary"    : "/tmp",
+          "mmseqs"       : "/usr/local/bin/mmseqs"
+        },
+        "redis" : {
+          "network"  : "tcp",
+          "address"  : "localhost:6379",
+          "password" : "",
+          "index"    : 0
+        },
+        "mail" : {
+          "type"      : "null",
+          "sender"    : "mail@example.org",
+          "templates" : {
+            "success" : { "subject" : "-- %s", "body" : "%s" },
+            "timeout" : { "subject" : "-- %s", "body" : "%s" },
+            "error"   : { "subject" : "-- %s", "body" : "%s" }
+          }
+        }
+      }
+  # Builds every sequence database before the main containers start. The app builds
+  # databases via IndexJobs through its job queue; with the shared redis queue those
+  # jobs are deduplicated globally and each database would be built on only ONE pod
+  # (leaving every other pod unable to serve searches for it). Building in an init
+  # container in -local mode (private local queue) guarantees every pod has all
+  # databases before its worker ever consumes a shared-queue job. CheckDatabase
+  # skips databases whose files already exist, so the runtime index jobs become no-ops.
+  build_databases.sh:
+    value: |+
+      #!/bin/sh
+      # Waits for "status":"COMPLETE" in each .params file, which is what the app itself
+      # writes once a database is fully usable and what the server checks when validating
+      # a search ("Selected databases are not valid!" otherwise). Do NOT wait on the .idx
+      # files instead: they appear before the status is written, so the builder would be
+      # killed in between and the database would stay stuck at RUNNING forever.
+      echo "# Building sequence databases via mmseqs-web local mode"
+      mkdir -p /tmp/init-jobs
+      /usr/local/bin/mmseqs-web -local -config /etc/mmseqs-web/config-init.json &
+      PID=$!
+      while true; do
+        alldone=1
+        for p in /opt/mmseqs-web/databases/*.params; do
+          [ -e "$p" ] || continue
+          base=${p%.params}
+          # empty FASTA files (e.g. no model DNA/RNA sequences) are not indexed by the app
+          [ -s "$base.fasta" ] || continue
+          case "$(cat $p)" in
+            *'"status":"COMPLETE"'*) ;;
+            *'"status":"ERROR"'*)
+              echo "# ERROR: indexing failed for $base";
+              kill $PID 2>/dev/null; exit 1 ;;
+            *) alldone=0 ;;
+          esac
+          [ "$alldone" = 1 ] || break
+        done
+        [ "$alldone" = 1 ] && break
+        kill -0 $PID 2>/dev/null || { echo "# ERROR: mmseqs-web exited before databases were built"; exit 1; }
+        sleep 10
+      done
+      echo "# All databases built and marked COMPLETE:"
+      grep -o '"status":"[A-Z]*"' /opt/mmseqs-web/databases/*.params
+      kill $PID
+      wait $PID 2>/dev/null
+      exit 0
   nginx.conf:
     value: |-
       server {
@@ -251,10 +363,10 @@ appConfigs:
   warm_up_query.sh:
     value: |+
       #!/bin/sh
-      # Warm up seqsearch service with one query. For some reason the first query is always very slow (which makes arches time out on it). This guarantees that users don't see that problem.
-      echo "# Will now warm up the server with 1 query. This will take 25 minutes"
-      sleep 1440  # give time for server to init indices
-      # NOTE (Sebastian, 2022): the following line reports 'Selected databases are not valid!' if databases are still initializing (with the service still up and running but maybe in an unhealthy state) - I've increased the wait time above to hopefully avoid that
+      # Warm up seqsearch service with one query. The first query on a cold pod is slow (page cache); this guarantees that users don't see that problem.
+      # Databases are prebuilt by the database-builder init container, so there is no need for the old fixed 1440s sleep: just wait until the api answers.
+      echo "# Waiting for the api to be up before warming up"
+      until wget -qO /dev/null http://localhost/api/databases 2>/dev/null; do sleep 5; done
       wget --post-data "q=@/tmp/test.fasta&mode=accept&database[]=pdb_and_models_protein_sequence" http://localhost/api/ticket
       sleep 60  # give time for query to execute. There's no need to look at results, just let it execute
       echo "# Done warming up"
