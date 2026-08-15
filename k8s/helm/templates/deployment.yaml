@@ -25,6 +25,11 @@ spec:
   progressDeadlineSeconds: {{ $.Values.deploymentProgressTimeOut }}
   template:
     metadata:
+      annotations:
+        # Roll the pods whenever the config or database params change. Without this,
+        # configmap-only merges never reach running pods (config files are subPath
+        # mounts); the old twice-daily restarts used to mask that.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
       labels:
         {{- include "helm_chart.selectorLabels" $ | nindent 8 }}
         rcsb.org/path: {{ . | quote }}
