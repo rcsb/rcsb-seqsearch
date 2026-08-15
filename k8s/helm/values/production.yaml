@@ -23,8 +23,13 @@ image:
   redis:
     repository: "harbor.devops.k8s.rcsb.org/dockerhub/library/redis"
     pullPolicy: IfNotPresent
-    # Overrides the image tag whose default is the chart appVersion.
-    tag: "alpine"
+    # Pin the patch version, do NOT use a floating tag like "alpine". Nodes cache
+    # whatever a floating tag pointed at when they first pulled it, so different nodes
+    # end up running different redis versions. That was harmless while redis data was
+    # ephemeral, but now that job state is persisted an older redis can be scheduled
+    # onto the RDB written by a newer one, fail with "Can't handle RDB format version",
+    # and crash-loop, taking the whole path out of service.
+    tag: "8.8.1-alpine"
   web_api:
     repository: "harbor.devops.k8s.rcsb.org/dockerhub/soedinglab/mmseqs2-app-backend"
     pullPolicy: IfNotPresent
