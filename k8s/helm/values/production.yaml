@@ -264,6 +264,11 @@ appConfigs:
   build_databases.sh:
     value: |+
       #!/bin/sh
+      # Waits for "status":"COMPLETE" in each .params file, which is what the app itself
+      # writes once a database is fully usable and what the server checks when validating
+      # a search ("Selected databases are not valid!" otherwise). Do NOT wait on the .idx
+      # files instead: they appear before the status is written, so the builder would be
+      # killed in between and the database would stay stuck at RUNNING forever.
       echo "# Building sequence databases via mmseqs-web local mode"
       mkdir -p /tmp/init-jobs
       /usr/local/bin/mmseqs-web -local -config /etc/mmseqs-web/config-init.json &
@@ -275,14 +280,21 @@ appConfigs:
           base=${p%.params}
           # empty FASTA files (e.g. no model DNA/RNA sequences) are not indexed by the app
           [ -s "$base.fasta" ] || continue
-          [ -f "$base.idx.index" ] || { alldone=0; break; }
+          case "$(cat $p)" in
+            *'"status":"COMPLETE"'*) ;;
+            *'"status":"ERROR"'*)
+              echo "# ERROR: indexing failed for $base";
+              kill $PID 2>/dev/null; exit 1 ;;
+            *) alldone=0 ;;
+          esac
+          [ "$alldone" = 1 ] || break
         done
         [ "$alldone" = 1 ] && break
         kill -0 $PID 2>/dev/null || { echo "# ERROR: mmseqs-web exited before databases were built"; exit 1; }
         sleep 10
       done
-      echo "# All databases built:"
-      ls -l /opt/mmseqs-web/databases/*.idx.index
+      echo "# All databases built and marked COMPLETE:"
+      grep -o '"status":"[A-Z]*"' /opt/mmseqs-web/databases/*.params
       kill $PID
       wait $PID 2>/dev/null
       exit 0
