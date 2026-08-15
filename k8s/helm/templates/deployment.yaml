@@ -121,6 +121,13 @@ spec:
               mountPath: /etc/mmseqs-web/config.json
               subPath: config.json
               readOnly: true
+          # No probe here on purpose: this server listens on 127.0.0.1 only (see
+          # server.address; binding the pod IP would expose the api unproxied, bypassing
+          # nginx's upload limit), and the kubelet probes the pod IP, so httpGet and
+          # tcpSocket cannot reach it. The image has no http client for an exec probe
+          # either. The webserver's readiness probe covers this container instead: it
+          # calls the api through nginx, so a wedged api takes the pod out of the
+          # service. It cannot restart this container, though.
           resources:
             {{- toYaml $.Values.resources.api | nindent 12 }}
         - name: mmseqs-web-worker
@@ -153,15 +160,33 @@ spec:
           resources:
             {{- toYaml $.Values.resources.webserver | nindent 12 }}
           readinessProbe:
-            # Databases are prebuilt by the database-builder init container, so the api
-            # is usable shortly after the main containers start. (The old 1440s delay
-            # was a blind timer covering the in-band index build.)
-            initialDelaySeconds: 30
+            # A 200 from /api/databases only proves nginx and the api are alive: the
+            # endpoint lists just the databases marked COMPLETE, so a pod whose databases
+            # are half built still passes it. Assert instead that the database searches
+            # actually need is advertised, and look up a ticket, which is the cheapest
+            # call that proves the api can reach its redis (a well-formed but unknown id
+            # answers UNKNOWN; /api/databases alone reads params off disk and would pass
+            # with redis down). Databases are prebuilt by the database-builder init
+            # container, so this is usable shortly after the containers start.
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - >
+                  wget -qO- http://localhost/api/databases | grep -q '"path":"{{ $.Values.probes.requiredDatabase }}"' &&
+                  wget -qO- http://localhost/api/ticket/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA > /dev/null
+            initialDelaySeconds: 15
             timeoutSeconds: 5
-            periodSeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            # static index: restarts a wedged nginx without depending on the api
             httpGet:
               port: http
-              path: /api/databases
+              path: /
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 20
+            failureThreshold: 3
         - name: query-warmer
           image: busybox:1.37
           imagePullPolicy: Always

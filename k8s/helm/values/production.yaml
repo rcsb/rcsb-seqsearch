@@ -92,10 +92,18 @@ service:
   # that traffic still reaches exactly one path as it does in production.
   livePath: ""
 
+probes:
+  # Database that must be advertised by the api for a pod to be considered ready.
+  # /api/databases lists only the databases whose params say COMPLETE, so requiring a
+  # named one turns a "200 OK" into a real statement about this pod being able to serve
+  # searches. Use a database that is never empty (unlike the model DNA/RNA ones, which
+  # have no sequences in some releases): this is also arches' default search target.
+  requiredDatabase: "pdb_and_models_protein_sequence"
+
 # ingress declares the Ingress resource to be created and allow access to the service from the external internet.
 # Set ingress.enabled to true to create this Ingress resource. Double-check the host values for your application.
-# No session affinity: job state (redis + jobs volume) is shared by all pods, so any pod
-# can answer any request.
+# No session affinity: job state (redis + jobs volume) is shared by all pods OF A PATH,
+# so any pod of the live path can answer any request.
 
 
 ingress:
