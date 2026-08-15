@@ -1,0 +1,109 @@
+---
+# Shared redis holding all job state (status keys, pending queue) for every seqsearch pod.
+# This is what allows any pod to answer any ticket poll, removing the need for
+# client->pod session stickiness.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "helm_chart.redisName" . }}
+  labels:
+    {{- include "helm_chart.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: two redis instances must never write the same data dir
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "helm_chart.redisSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "helm_chart.redisSelectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        - name: {{ . }}
+      {{- end }}
+      containers:
+        - name: redis
+          image: "{{ .Values.image.redis.repository }}:{{ .Values.image.redis.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.image.redis.pullPolicy }}
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            # /data is where the official redis image writes its RDB snapshots
+            - mountPath: /data
+              name: redis-data
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 5
+            failureThreshold: 5
+            successThreshold: 1
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 3
+          resources:
+            {{- toYaml .Values.resources.redis | nindent 12 }}
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: {{ include "helm_chart.redisName" . }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "helm_chart.redisName" . }}
+  labels:
+    {{- include "helm_chart.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: redis
+      protocol: TCP
+      name: redis
+  selector:
+    {{- include "helm_chart.redisSelectorLabels" . | nindent 4 }}
+---
+# Persistent so that job state (including the COMPLETE-status cache index) survives
+# redis pod rescheduling. Must stay consistent with the shared jobs volume: a cached
+# COMPLETE status is only valid while the matching job dir exists on the jobs PVC.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "helm_chart.redisName" . }}
+  labels:
+    {{- include "helm_chart.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: csi-cephfs-sc
+  resources:
+    requests:
+      storage: {{ .Values.sharedState.redisVolumeSize }}
+---
+# Shared jobs volume: job inputs and results, written by whichever worker pops the job,
+# readable by every pod so any pod can serve any /result request.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "helm_chart.jobsPvcName" . }}
+  labels:
+    {{- include "helm_chart.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: csi-cephfs-sc
+  resources:
+    requests:
+      storage: {{ .Values.sharedState.jobsVolumeSize }}

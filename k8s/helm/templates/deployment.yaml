@@ -77,34 +77,28 @@ spec:
               chown 1000 /opt/databases/*;
               sed -i "s/\$today/$(date -I)/g" /opt/databases/*params;
               echo "DB files loading complete";
-      containers:
-        - name: mmseqs-web-redis
-          image: "{{ $.Values.image.redis.repository }}:{{ $.Values.image.redis.tag | default "latest" }}"
-          imagePullPolicy: {{ $.Values.image.redis.pullPolicy }}
-          ports:
-            - name: redis
-              containerPort: 6379
+        # Builds all mmseqs databases/indexes BEFORE the main containers start, so the
+        # worker never consumes shared-queue jobs for databases it does not have yet.
+        # See build_databases.sh in the values file for the full rationale.
+        - name: database-builder
+          image: "{{ $.Values.image.web_worker.repository }}:{{ $.Values.image.web_worker.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.image.web_worker.pullPolicy }}
+          command: [ "/sbin/tini" ]
+          args: [ "-s", "--", "/bin/sh", "/opt/mmseqs-web-init/build_databases.sh" ]
           volumeMounts:
-            - mountPath: /var/lib/redis
-              name: redis-volume
-          livenessProbe:
-            tcpSocket:
-              port: redis # named port
-            initialDelaySeconds: 30
-            timeoutSeconds: 5
-            periodSeconds: 5
-            failureThreshold: 5
-            successThreshold: 1
-          readinessProbe:
-            exec:
-              command:
-                - redis-cli
-                - ping
-            initialDelaySeconds: 20
-            timeoutSeconds: 5
-            periodSeconds: 3
+            - mountPath: /opt/mmseqs-web/databases
+              name: databases
+            - name: {{ include "helm_chart.configmapName" $ }}
+              mountPath: /etc/mmseqs-web/config-init.json
+              subPath: config-init.json
+              readOnly: true
+            - name: {{ include "helm_chart.configmapName" $ }}
+              mountPath: /opt/mmseqs-web-init/build_databases.sh
+              subPath: build_databases.sh
+              readOnly: true
           resources:
-            {{- toYaml $.Values.resources.redis | nindent 12 }}
+            {{- toYaml $.Values.resources.worker | nindent 12 }}
+      containers:
         - name: mmseqs-web-api
           image: "{{ $.Values.image.web_api.repository }}:{{ $.Values.image.web_api.tag | default $.Chart.AppVersion }}"
           imagePullPolicy: {{ $.Values.image.web_api.pullPolicy }}
@@ -154,7 +148,10 @@ spec:
           resources:
             {{- toYaml $.Values.resources.webserver | nindent 12 }}
           readinessProbe:
-            initialDelaySeconds: 1440
+            # Databases are prebuilt by the database-builder init container, so the api
+            # is usable shortly after the main containers start. (The old 1440s delay
+            # was a blind timer covering the in-band index build.)
+            initialDelaySeconds: 30
             timeoutSeconds: 5
             periodSeconds: 3
             httpGet:
@@ -173,16 +170,6 @@ spec:
               name: {{ include "helm_chart.configmapName" $ }}
               subPath: "warm_up_query.sh"
       volumes:
-        - name: redis-volume
-          ephemeral:
-            volumeClaimTemplate:
-              spec:
-                accessModes:
-                  - "ReadWriteMany"
-                storageClassName: csi-cephfs-sc
-                resources:
-                  requests:
-                    storage: {{ $.Values.ephemeralVolumes.redis_volume.sizeLimit }}
         - name: databases
           ephemeral:
             volumeClaimTemplate:
@@ -193,16 +180,11 @@ spec:
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.databases.sizeLimit }}
+        # Shared across all pods (and both a/b paths): any pod can serve any job's results,
+        # and the results cache survives restarts. See redis.yaml for the matching PVC.
         - name: jobs
-          ephemeral:
-            volumeClaimTemplate:
-              spec:
-                accessModes:
-                  - "ReadWriteMany"
-                storageClassName: csi-cephfs-sc
-                resources:
-                  requests:
-                    storage: {{ $.Values.ephemeralVolumes.jobs.sizeLimit }}
+          persistentVolumeClaim:
+            claimName: {{ include "helm_chart.jobsPvcName" $ }}
         - name: sequence-vol
           persistentVolumeClaim:
             claimName: {{  $.Values.persistentVolumeClaimName }}

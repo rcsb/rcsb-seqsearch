@@ -58,3 +58,26 @@ ConfigMap resource name. Ensure names conform to character limits in Kubernetes
 {{- define "helm_chart.dbParamsName" -}}
 {{- printf "%s-dbparams" (include "helm_chart.fullname" . | trunc 54 | trimSuffix "-") }}
 {{- end }}
+
+{{/*
+Name for the shared redis Deployment/Service holding job state for all seqsearch pods.
+*/}}
+{{- define "helm_chart.redisName" -}}
+{{- printf "%s-redis" (include "helm_chart.fullname" . | trunc 57 | trimSuffix "-") }}
+{{- end }}
+
+{{/*
+Selector labels for the redis pod. Deliberately distinct from helm_chart.selectorLabels:
+the main a/b services select on those alone, and the redis pod must not match them.
+*/}}
+{{- define "helm_chart.redisSelectorLabels" -}}
+app.kubernetes.io/name: {{ .Chart.Name }}-redis
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{/*
+Name for the shared jobs PVC (results cache), mounted RWX by all seqsearch pods.
+*/}}
+{{- define "helm_chart.jobsPvcName" -}}
+{{- printf "%s-jobs" (include "helm_chart.fullname" . | trunc 58 | trimSuffix "-") }}
+{{- end }}

@@ -8,7 +8,7 @@ metadata:
 data:
 {{- range $file, $_ := .Values.appConfigs }}
   {{ $file }}: |
-{{ $_.value | indent 4 }}
+{{ tpl $_.value $ | indent 4 }}
 {{ end }}
 ---
 apiVersion: v1
