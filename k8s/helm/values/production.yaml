@@ -138,14 +138,16 @@ resources:
       cpu: 10m
       memory: 64Mi
     limits:
-      cpu: 1
+      cpu: 2
       memory: 1Gi
   worker:
     requests:
-      cpu: 10m
+      cpu: 1
       memory: 45Gi
     limits:
-      cpu: 1
+      # mmseqs auto-detects the host's cores (96) for its thread count and is cgroup-unaware,
+      # so a low limit means heavy throttling: searches run ~threads/limit times slower.
+      cpu: 16
       memory: 90Gi
   webserver:
     requests:
@@ -162,7 +164,7 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "localhost:3000",
+          "address"    : "127.0.0.1:3000",
           "dbmanagment": false,
           "cors"       : true
         },
@@ -212,7 +214,9 @@ appConfigs:
       
         location /api {
           rewrite ^/api(/.*) $1 break;
-          proxy_pass        http://localhost:3000/;
+          # 127.0.0.1, not localhost: the Go backend only listens on IPv4, and nginx
+          # otherwise tries [::1] first and logs a connection-refused error on every request
+          proxy_pass        http://127.0.0.1:3000/;
       
           proxy_set_header  Host             $host;
           proxy_set_header  X-Real-IP        $remote_addr;
