@@ -93,11 +93,11 @@ spec:
           volumeMounts:
             - mountPath: /opt/mmseqs-web/databases
               name: databases
-            - name: {{ include "helm_chart.configmapName" $ }}
+            - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
               mountPath: /etc/mmseqs-web/config-init.json
               subPath: config-init.json
               readOnly: true
-            - name: {{ include "helm_chart.configmapName" $ }}
+            - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
               mountPath: /opt/mmseqs-web-init/build_databases.sh
               subPath: build_databases.sh
               readOnly: true
@@ -117,7 +117,7 @@ spec:
               name: databases
             - mountPath: /opt/mmseqs-web/jobs
               name: jobs
-            - name: {{ include "helm_chart.configmapName" $ }}
+            - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
               mountPath: /etc/mmseqs-web/config.json
               subPath: config.json
               readOnly: true
@@ -133,7 +133,7 @@ spec:
               name: databases
             - mountPath: /opt/mmseqs-web/jobs
               name: jobs
-            - name: {{ include "helm_chart.configmapName" $ }}
+            - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
               mountPath: /etc/mmseqs-web/config.json
               subPath: config.json
               readOnly: true
@@ -146,7 +146,7 @@ spec:
             - containerPort: {{ $.Values.service.port }}
               name: http
           volumeMounts:
-            - name: {{ include "helm_chart.configmapName" $ }}
+            - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
               mountPath: /etc/nginx/conf.d/default.conf
               subPath: nginx.conf
               readOnly: true
@@ -168,11 +168,11 @@ spec:
           command: [ "/opt/warm_up_query.sh" ]
           volumeMounts:
             - mountPath: "/tmp/test.fasta"
-              name: {{ include "helm_chart.configmapName" $ }}
+              name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
               subPath: "test.fasta"
               readOnly: true
             - mountPath: "/opt/warm_up_query.sh"
-              name: {{ include "helm_chart.configmapName" $ }}
+              name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
               subPath: "warm_up_query.sh"
       volumes:
         - name: databases
@@ -185,17 +185,18 @@ spec:
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.databases.sizeLimit }}
-        # Shared across all pods (and both a/b paths): any pod can serve any job's results,
-        # and the results cache survives restarts. See redis.yaml for the matching PVC.
+        # Shared by all pods of THIS path (never across paths, which hold different
+        # datasets): any pod of the path can serve any of its job's results, and the
+        # results cache survives restarts. See redis.yaml for the matching PVC.
         - name: jobs
           persistentVolumeClaim:
-            claimName: {{ include "helm_chart.jobsPvcName" $ }}
+            claimName: {{ include "helm_chart.jobsPvcName" (dict "ctx" $ "path" .) }}
         - name: sequence-vol
           persistentVolumeClaim:
             claimName: {{  $.Values.persistentVolumeClaimName }}
-        - name: {{ include "helm_chart.configmapName" $ }}
+        - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
           configMap:
-            name: {{ include "helm_chart.configmapName" $ }}
+            name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
             defaultMode: 0744
         - name: {{ include "helm_chart.dbParamsName" $ }}
           configMap:

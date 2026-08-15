@@ -46,10 +46,11 @@ Persistent volume name. Utilize namespace aware naming to allow deployments of c
 {{- end }}
 
 {{/*
-ConfigMap resource name. Ensure names conform to character limits in Kubernetes
+ConfigMap resource name. Ensure names conform to character limits in Kubernetes.
+Per path, because config.json points at the path's own redis. Takes (dict "ctx" $ "path" "a").
 */}}
 {{- define "helm_chart.configmapName" -}}
-{{- printf "%s-config" (include "helm_chart.fullname" . | trunc 56 | trimSuffix "-") }}
+{{- printf "%s-config-%s" (include "helm_chart.fullname" .ctx | trunc 53 | trimSuffix "-") .path }}
 {{- end }}
 
 {{/*
@@ -60,24 +61,34 @@ ConfigMap resource name. Ensure names conform to character limits in Kubernetes
 {{- end }}
 
 {{/*
-Name for the shared redis Deployment/Service holding job state for all seqsearch pods.
+Job state is shared by all pods of ONE path, never across paths: a and b hold different
+weekly datasets, and mmseqs2-app hashes ticket ids from the query and the database NAMES
+only (not the data version). Sharing state across paths would therefore serve path a's
+cached results for path b's data. Hence every state resource below is per path.
+
+All three take a dict: (dict "ctx" $ "path" "a").
+*/}}
+
+{{/*
+Name for a path's redis Deployment/Service/PVC.
 */}}
 {{- define "helm_chart.redisName" -}}
-{{- printf "%s-redis" (include "helm_chart.fullname" . | trunc 57 | trimSuffix "-") }}
+{{- printf "%s-redis-%s" (include "helm_chart.fullname" .ctx | trunc 54 | trimSuffix "-") .path }}
 {{- end }}
 
 {{/*
-Selector labels for the redis pod. Deliberately distinct from helm_chart.selectorLabels:
-the main a/b services select on those alone, and the redis pod must not match them.
+Selector labels for a path's redis pod. Deliberately distinct from helm_chart.selectorLabels:
+the main a/b services select on those alone, and the redis pods must not match them.
 */}}
 {{- define "helm_chart.redisSelectorLabels" -}}
-app.kubernetes.io/name: {{ .Chart.Name }}-redis
-app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/name: {{ .ctx.Chart.Name }}-redis
+app.kubernetes.io/instance: {{ .ctx.Release.Name }}
+rcsb.org/path: {{ .path | quote }}
 {{- end }}
 
 {{/*
-Name for the shared jobs PVC (results cache), mounted RWX by all seqsearch pods.
+Name for a path's jobs PVC (results cache), mounted RWX by all pods of that path.
 */}}
 {{- define "helm_chart.jobsPvcName" -}}
-{{- printf "%s-jobs" (include "helm_chart.fullname" . | trunc 58 | trimSuffix "-") }}
+{{- printf "%s-jobs-%s" (include "helm_chart.fullname" .ctx | trunc 55 | trimSuffix "-") .path }}
 {{- end }}

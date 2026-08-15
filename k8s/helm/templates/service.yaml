@@ -36,3 +36,6 @@ spec:
       name: http
   selector:
     {{- include "helm_chart.selectorLabels" . | nindent 4 }}
+    {{- with .Values.service.livePath }}
+    rcsb.org/path: {{ . | quote }}
+    {{- end }}

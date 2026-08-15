@@ -46,13 +46,19 @@ ephemeralVolumes:
   databases:
     sizeLimit: 60Gi
 
-# Shared job state: one redis (status keys + pending queue) and one RWX jobs volume
-# (results cache) used by ALL pods across both a/b paths. This is what lets any pod
-# answer any ticket poll or result fetch, so no client->pod stickiness is needed.
+# Per-path shared job state: EACH path (a and b) gets its own redis (status keys +
+# pending queue) and its own RWX jobs volume (results cache), shared by all pods of that
+# path. That is what lets any pod of a path answer any ticket poll or result fetch, so no
+# client->pod stickiness is needed. State is never shared ACROSS paths: a and b hold
+# different weekly datasets and ticket ids hash only the query and database names, so a
+# common cache would serve one path's results for the other path's data.
 # NOTE: mmseqs-app caches jobs in the jobs volume and nothing cleans it up yet. Unlike
-#       the old per-pod ephemeral volumes, this one SURVIVES restarts, so it grows until
-#       a cleanup job lands (planned as a separate change). Sized generously as a bridge;
+#       the old per-pod ephemeral volumes, these SURVIVE restarts, so they grow until a
+#       cleanup job lands (planned as a separate change). Sized generously as a bridge;
 #       cleanup must delete the redis status key BEFORE the job dir (see cleanup design).
+#       That cleanup also needs a per-path flush when a path receives new data, since
+#       results cached against the previous dataset stay valid-looking otherwise.
+# Sizes are PER PATH.
 sharedState:
   redisVolumeSize: 10Gi
   jobsVolumeSize: 150Gi
@@ -79,6 +85,12 @@ securityContext:
 service:
   type: ClusterIP
   port: 80
+  # Which path the main service (and so the ingress) points at. MUST stay empty here:
+  # in production the path-operator injects the live path into the selector, reading it
+  # from the namespace's live-path ConfigMap, and it is switched weekly. Set this only
+  # in namespaces where the operator does not run (e.g. personal test namespaces), so
+  # that traffic still reaches exactly one path as it does in production.
+  livePath: ""
 
 # ingress declares the Ingress resource to be created and allow access to the service from the external internet.
 # Set ingress.enabled to true to create this Ingress resource. Double-check the host values for your application.
@@ -185,7 +197,7 @@ appConfigs:
         },
         "redis" : {
           "network"  : "tcp",
-          "address"  : "{{ include "helm_chart.redisName" . }}:6379",
+          "address"  : "{{ include "helm_chart.redisName" (dict "ctx" . "path" .path) }}:6379",
           "password" : "",
           "index"    : 0
         },

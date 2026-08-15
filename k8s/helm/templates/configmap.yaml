@@ -1,15 +1,22 @@
+{{- range tuple "a" "b" }}
+{{- $path := . }}
 ---
+# Rendered per path: config.json points at the path's own redis. The values are run
+# through tpl with a context carrying "path", so they can name path-scoped resources.
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "helm_chart.configmapName" . }}
+  name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" $path) }}
   labels:
-    {{- include "helm_chart.labels" . | nindent 4 }}
+    {{- include "helm_chart.labels" $ | nindent 4 }}
+    rcsb.org/path: {{ $path | quote }}
 data:
-{{- range $file, $_ := .Values.appConfigs }}
+{{- $tplCtx := dict "Values" $.Values "Chart" $.Chart "Release" $.Release "Template" $.Template "Capabilities" $.Capabilities "path" $path }}
+{{- range $file, $_ := $.Values.appConfigs }}
   {{ $file }}: |
-{{ tpl $_.value $ | indent 4 }}
+{{ tpl $_.value $tplCtx | indent 4 }}
 {{ end }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
