@@ -87,6 +87,13 @@ rcsb.org/path: {{ .path | quote }}
 {{- end }}
 
 {{/*
+Name for a path's cleanup CronJob and its script ConfigMap.
+*/}}
+{{- define "helm_chart.cleanupName" -}}
+{{- printf "%s-cleanup-%s" (include "helm_chart.fullname" .ctx | trunc 52 | trimSuffix "-") .path }}
+{{- end }}
+
+{{/*
 Name for a path's jobs PVC (results cache), mounted RWX by all pods of that path.
 */}}
 {{- define "helm_chart.jobsPvcName" -}}
