@@ -5,4 +5,11 @@ description: An Helm chart for the RCSB seqsearch service
 type: application
 
 version: 0.1.0
-appVersion: "version-5"
+# mmseqs2-app version, used as the default tag for the api, worker and webserver images.
+# v5 leaks a file descriptor per job: its worker defers f.Close() inside the loop that
+# never returns, so a worker runs out of handles after a few thousand searches, stops
+# taking jobs while still alive, and only a restart recovers it. Fixed upstream in v6
+# ("missing fclose calls which would eventually result in file handle exhaustion").
+# v7 is the last release that keeps job status in redis, the nested .params format and
+# a Docker Hub image, all of which this chart depends on; v8 changes all three.
+appVersion: "version-7"

@@ -271,7 +271,11 @@ appConfigs:
       }
   # Config for the database-builder init container: same as config.json but with a
   # container-local jobs dir, so the local-mode build queue never touches the shared
-  # jobs volume or redis.
+  # jobs volume or redis. Keeping that dir private also matters because local mode
+  # deletes job directories it considers broken when it starts up.
+  # "local.workers" is REQUIRED from v7 on: local mode used to start one worker
+  # unconditionally, and now starts however many this says, so leaving it out means no
+  # worker, no databases ever built, and an init container that waits forever.
   config-init.json:
     value: |-
       {
@@ -286,6 +290,9 @@ appConfigs:
           "results"      : "/tmp/init-jobs",
           "temporary"    : "/tmp",
           "mmseqs"       : "/usr/local/bin/mmseqs"
+        },
+        "local" : {
+          "workers" : 1
         },
         "redis" : {
           "network"  : "tcp",
