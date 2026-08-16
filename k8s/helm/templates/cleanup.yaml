@@ -25,8 +25,9 @@ data:
     JOBS=/jobs
     Q_AGE={{ $.Values.cleanup.queueMaxAgeMinutes }}
     C_AGE={{ $.Values.cleanup.cacheMaxAgeMinutes }}
+    O_AGE={{ $.Values.cleanup.orphanGraceMinutes }}
 
-    echo "$(date -Iseconds) cleanup path={{ $path }} queue_age=${Q_AGE}m cache_age=${C_AGE}m"
+    echo "$(date -Iseconds) cleanup path={{ $path }} queue_age=${Q_AGE}m cache_age=${C_AGE}m orphan_grace=${O_AGE}m"
 
     # 1. Abandoned queue entries.
     # Clients give up after ~30s (arches: 15s query timeout, 30s poll deadline), so a job
@@ -48,6 +49,15 @@ data:
     fi
     echo "queue: dropped $n abandoned of $(wc -l < /tmp/queued.txt) queued"
 
+    # remove a list of job directories read from stdin
+    rm_dirs() {
+      while read -r id; do
+        # ticket ids are base64url and may start with '-', so always keep the $JOBS prefix
+        case "$id" in ''|*/*|.|..) continue ;; esac
+        rm -rf "$JOBS/$id"
+      done
+    }
+
     # 2. Expired cached results.
     # Delete the redis key BEFORE the directory: a cached COMPLETE status pointing at
     # files that are gone hands the user a broken ticket, whereas a missing key just
@@ -56,13 +66,21 @@ data:
     m=$(wc -l < /tmp/expired.txt)
     if [ "$m" -gt 0 ]; then
       sed 's|^|mmseqs:status:|' /tmp/expired.txt | xargs -n 200 redis-cli -h "$REDIS" del > /dev/null
-      while read -r id; do
-        # ticket ids are base64url and may start with '-', so always keep the $JOBS prefix
-        case "$id" in ''|*/*|.|..) continue ;; esac
-        rm -rf "$JOBS/$id"
-      done < /tmp/expired.txt
+      rm_dirs < /tmp/expired.txt
     fi
     echo "cache: removed $m expired job dirs"
+
+    # 3. Orphaned directories: no redis key, so nothing can ever look them up again.
+    # The queue prune above leaves these behind by design, and a redis restore or flush
+    # orphans everything at once. Only directories older than the grace period are
+    # considered, so a job whose files exist but whose key is a moment away from being
+    # written is never touched.
+    redis-cli -h "$REDIS" --scan --pattern 'mmseqs:status:*' 2>/dev/null | tr -d '\r' | sed 's|^mmseqs:status:||' | sort > /tmp/known.txt
+    find "$JOBS" -mindepth 1 -maxdepth 1 -type d -mmin +"$O_AGE" | sed 's|.*/||' | sort > /tmp/candidates.txt
+    comm -23 /tmp/candidates.txt /tmp/known.txt > /tmp/orphans.txt
+    o=$(wc -l < /tmp/orphans.txt)
+    [ "$o" -gt 0 ] && rm_dirs < /tmp/orphans.txt
+    echo "orphans: removed $o job dirs with no redis key"
     echo "remaining: $(find "$JOBS" -mindepth 1 -maxdepth 1 -type d | wc -l) job dirs, $(redis-cli -h "$REDIS" dbsize) redis keys"
     df -h "$JOBS" | tail -1
 ---

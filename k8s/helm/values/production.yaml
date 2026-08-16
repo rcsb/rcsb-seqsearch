@@ -114,9 +114,17 @@ cleanup:
   # where a queue becomes deeper than the timeout allows.
   queueMaxAgeMinutes: 5
   # How long a computed result stays cached. Repeat queries within this window are
-  # served instantly instead of recomputed. Bounds both the jobs volume and the number
-  # of directories on it, which is what makes the cephfs metadata load grow.
-  cacheMaxAgeMinutes: 1440
+  # served instantly instead of recomputed; a miss just costs a recompute of a couple of
+  # seconds. Kept short because the directory count is what drives the cephfs metadata
+  # load: at ~180 searches/min a day of retention is ~260k directories on one volume,
+  # an hour is ~11k. The cache mostly earns its keep by absorbing duplicate submissions
+  # during retry bursts, which arrive within seconds.
+  cacheMaxAgeMinutes: 60
+  # Job directories with no redis status key are unreachable: nothing can look them up,
+  # so they are pure garbage. The queue prune leaves them behind by design, and losing
+  # redis would orphan everything at once. Only the grace period keeps this safe, by
+  # ignoring directories young enough to belong to a job still being submitted.
+  orphanGraceMinutes: 15
   resources:
     requests:
       cpu: 50m
