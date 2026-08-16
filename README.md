@@ -49,19 +49,44 @@ proving the api can reach its redis. A plain `/api/databases` 200 would pass wit
 down or with databases missing. The api container has no probe of its own: it listens on
 127.0.0.1 only, which the kubelet cannot reach.
 
+### Cleanup
+
+A CronJob per path prunes, every 10 minutes, the three things that otherwise grow
+without bound (nothing else does: the twice-daily restarts that used to wipe them are
+gone):
+
+- **queue entries** older than `cleanup.queueMaxAgeMinutes`. Clients give up after ~30s,
+  so a job still waiting to start minutes later will never be collected. Left alone
+  these accumulate until the queue is deeper than the client timeout allows, at which
+  point every query fails even though the workers are keeping up — the queue, not the
+  disk, is what takes the service down.
+- **cached results** older than `cleanup.cacheMaxAgeMinutes`. Kept short: the cost is
+  not the bytes but the number of directories on one volume, which is what the cephfs
+  metadata load scales with. It also bounds how long results computed against a path's
+  previous dataset can be served after that path is refreshed.
+- **orphaned job directories**, meaning those with no redis key, once past
+  `cleanup.orphanGraceMinutes`. Nothing can look them up, and the queue prune leaves
+  exactly these behind.
+
+Deletion order is what keeps this safe and is commented in the script: queue entry
+before status key, so a resubmission creates a fresh job instead of deduplicating onto
+a ticket that is no longer queued; and redis key before job directory, so a cached
+COMPLETE never points at results that are gone.
+
 ### Notes for operators
 
 - **Redis image is pinned to a patch version.** With a floating tag, nodes cache
   different versions, and a redis rescheduled onto an older one cannot read the
   persisted RDB, crash-loops, and takes the whole path out of service.
-- **Nothing prunes the jobs volume or redis yet.** Both used to be wiped by twice-daily
-  restarts, which are gone: the rolling restart workflow is now manual only. A cleanup
-  job is still to be written; it must delete the redis status key *before* the job
-  directory, otherwise a cached COMPLETE points at results that no longer exist. It
-  should also flush a path when that path receives new data, since results cached
-  against the previous dataset would otherwise keep being served.
+- **The rolling restart workflow is manual only**, since restarts no longer clean
+  anything up (see Cleanup above).
 - **The worker CPU limit is deliberately high.** mmseqs sizes its thread count from the
   host's cores and ignores the cgroup quota, so a low limit throttles searches badly.
+- **Capacity is sized against the queue, not CPU.** A pod drains ~80 searches/min; if
+  demand exceeds total drain for long enough, the queue passes the client timeout and
+  everything fails at once, so `replicaCount` needs enough margin to absorb losing a
+  worker. To recover from a backlog, flush the queue rather than waiting for it to
+  drain — everything in it is already older than any client will wait for.
 - Deployment is by ArgoCD, watching `master`. Changes to pod templates roll the pods on
   their own; changes to config alone are picked up through the `checksum/config`
   annotation.
