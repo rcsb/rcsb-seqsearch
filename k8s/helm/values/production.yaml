@@ -1,7 +1,12 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-replicaCount: 3
+# Sized from measured throughput: one pod drains ~80 searches/min, and east peaked at
+# ~180/min in Aug 2026 with 3 pods (~250/min), a margin thin enough that one stalled
+# worker put the service underwater and built an unrecoverable queue. 5 gives ~400/min
+# and still covers peak with one worker lost. NOTE: this applies to both paths, so the
+# standby path runs the same number of pods without serving traffic.
+replicaCount: 5
 
 # seqsearch is not a great candidate for autoscaling; it takes too long to start up.
 autoscaling:
