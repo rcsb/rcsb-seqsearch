@@ -215,9 +215,9 @@ resources:
       cpu: 1
       memory: 45Gi
     limits:
-      # mmseqs auto-detects the host's cores (96) for its thread count and is cgroup-unaware,
-      # so a low limit means heavy throttling: searches run ~threads/limit times slower.
-      cpu: 16
+      # Searches now pass --threads explicitly (see databaseParams), so the thread count
+      # no longer comes from mmseqs auto-detecting the node's cores
+      cpu: 8
       memory: 90Gi
   webserver:
     requests:
@@ -426,7 +426,7 @@ databaseParams:
           "default": true,
           "order": 0,
           "index": "-s 7.5",
-          "search": "-s 7.5 --max-seqs 2000"
+          "search": "-s 7.5 --max-seqs 2000 --threads 2"
         }
       }
   pdb_dna_sequence.params:
@@ -438,7 +438,7 @@ databaseParams:
           "default": false,
           "order": 1,
           "index": "--search-type 3",
-          "search": "--max-seqs 2000 --search-type 3 --strand 1"
+          "search": "--max-seqs 2000 --search-type 3 --strand 1 --threads 2"
         }
       }
   pdb_rna_sequence.params:
@@ -450,7 +450,7 @@ databaseParams:
           "default": false,
           "order": 2,
           "index": "--search-type 3",
-          "search": "--max-seqs 2000 --search-type 3 --strand 1"
+          "search": "--max-seqs 2000 --search-type 3 --strand 1 --threads 2"
         }
       }
   models_protein_sequence.params:
@@ -462,7 +462,7 @@ databaseParams:
           "default": false,
           "order": 3,
           "index": "-s 7.5",
-          "search": "-s 7.5 --max-seqs 2000"
+          "search": "-s 7.5 --max-seqs 2000 --threads 2"
         }
       }
   models_dna_sequence.params:
@@ -474,7 +474,7 @@ databaseParams:
           "default": false,
           "order": 4,
           "index": "--search-type 3",
-          "search": "--max-seqs 2000 --search-type 3 --strand 1"
+          "search": "--max-seqs 2000 --search-type 3 --strand 1 --threads 2"
         }
       }
   models_rna_sequence.params:
@@ -486,7 +486,7 @@ databaseParams:
           "default": false,
           "order": 5,
           "index": "--search-type 3",
-          "search": "--max-seqs 2000 --search-type 3 --strand 1"
+          "search": "--max-seqs 2000 --search-type 3 --strand 1 --threads 2"
         }
       }
   pdb_and_models_protein_sequence.params:
@@ -498,7 +498,7 @@ databaseParams:
           "default": false,
           "order": 6,
           "index": "-s 7.5",
-          "search": "-s 7.5 --max-seqs 2000"
+          "search": "-s 7.5 --max-seqs 2000 --threads 2"
         }
       }
   pdb_and_models_dna_sequence.params:
@@ -510,7 +510,7 @@ databaseParams:
           "default": false,
           "order": 7,
           "index": "--search-type 3",
-          "search": "--max-seqs 2000 --search-type 3 --strand 1"
+          "search": "--max-seqs 2000 --search-type 3 --strand 1 --threads 2"
         }
       }
   pdb_and_models_rna_sequence.params:
@@ -522,6 +522,6 @@ databaseParams:
           "default": false,
           "order": 8,
           "index": "--search-type 3",
-          "search": "--max-seqs 2000 --search-type 3 --strand 1"
+          "search": "--max-seqs 2000 --search-type 3 --strand 1 --threads 2"
         }
       }
