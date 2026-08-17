@@ -409,8 +409,10 @@ appConfigs:
       # Warm up seqsearch service with one query. The first query on a cold pod is slow (page cache); this guarantees that users don't see that problem.
       # Databases are prebuilt by the database-builder init container, so there is no need for the old fixed 1440s sleep: just wait until the api answers.
       echo "# Waiting for the api to be up before warming up"
-      until wget -qO /dev/null http://localhost/api/databases 2>/dev/null; do sleep 5; done
-      wget --post-data "q=@/tmp/test.fasta&mode=accept&database[]=pdb_and_models_protein_sequence" http://localhost/api/ticket
+      # 127.0.0.1, never localhost: localhost also resolves to ::1, which busybox wget
+      # tries first, and nginx only listens on IPv4
+      until wget -qO /dev/null http://127.0.0.1/api/databases 2>/dev/null; do sleep 5; done
+      wget --post-data "q=@/tmp/test.fasta&mode=accept&database[]=pdb_and_models_protein_sequence" http://127.0.0.1/api/ticket
       sleep 60  # give time for query to execute. There's no need to look at results, just let it execute
       echo "# Done warming up"
       sleep 86400 # Sleep for 1 day before stopping and having container restart
