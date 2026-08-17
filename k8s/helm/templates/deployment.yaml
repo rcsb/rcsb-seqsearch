@@ -172,9 +172,12 @@ spec:
               command:
                 - /bin/sh
                 - -c
+                # 127.0.0.1, never localhost: /etc/hosts maps localhost to ::1 as well,
+                # and this image's wget tries that first, while nginx listens on IPv4
+                # only. On v5's image it happened to pick IPv4 and this passed.
                 - >
-                  wget -qO- http://localhost/api/databases | grep -q '"path":"{{ $.Values.probes.requiredDatabase }}"' &&
-                  wget -qO- http://localhost/api/ticket/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA > /dev/null
+                  wget -qO- http://127.0.0.1/api/databases | grep -q '"path":"{{ $.Values.probes.requiredDatabase }}"' &&
+                  wget -qO- http://127.0.0.1/api/ticket/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA > /dev/null
             initialDelaySeconds: 15
             timeoutSeconds: 5
             periodSeconds: 10
