@@ -35,43 +35,49 @@ image:
     # onto the RDB written by a newer one, fail with "Can't handle RDB format version",
     # and crash-loop, taking the whole path out of service.
     tag: "8.8.1-alpine"
+  # Our own build of the v7 fork, not the upstream Docker Hub mirror: keeping
+  # results in redis is a change upstream does not have. api and worker are the
+  # same image, run with different flags.
+  #
+  # "production" is applied by the pipeline's retag job on every push to the
+  # mainline branch (workflow-docker.yaml sets mainline_branch: master-rcsb), so it
+  # MOVES. That is why the pull policy is Always: under IfNotPresent a node keeps
+  # serving whatever it cached the first time, and pods end up quietly running
+  # different builds from each other. To pin a release instead, use one of the
+  # immutable tags the same build publishes, sha-<commit> or gha_run_number_<n>,
+  # and set the policy back to IfNotPresent.
   web_api:
-    repository: "harbor.devops.k8s.rcsb.org/dockerhub/soedinglab/mmseqs2-app-backend"
-    pullPolicy: IfNotPresent
-    # Overrides the image tag whose default is the chart appVersion.
-    #tag: ""
+    repository: "harbor.devops.k8s.rcsb.org/rcsb/rcsb-mmseqs-app"
+    pullPolicy: Always
+    tag: "production"
   web_worker:
-    repository: "harbor.devops.k8s.rcsb.org/dockerhub/soedinglab/mmseqs2-app-backend"
-    pullPolicy: IfNotPresent
-    # Overrides the image tag whose default is the chart appVersion.
-    #tag: ""
-  web_webserver:
-    repository: "harbor.devops.k8s.rcsb.org/dockerhub/soedinglab/mmseqs2-app-frontend"
-    pullPolicy: IfNotPresent
-    # Overrides the image tag whose default is the chart appVersion.
-    #tag: ""
+    repository: "harbor.devops.k8s.rcsb.org/rcsb/rcsb-mmseqs-app"
+    pullPolicy: Always
+    tag: "production"
 
 ephemeralVolumes:
   # This is where the sequence databases and indices are stored.
   databases:
     sizeLimit: 60Gi
+  # Scratch for jobs in flight. A worker stages a job here, mmseqs runs against real
+  # files, and the directory is deleted as soon as the result is in redis, so this
+  # holds a handful of jobs rather than an hour of them. It is an emptyDir, so it
+  # counts against the container's ephemeral-storage limit: keep that above this.
+  jobs:
+    sizeLimit: 2Gi
 
-# Per-path shared job state: EACH path (a and b) gets its own redis (status keys +
-# pending queue) and its own RWX jobs volume (results cache), shared by all pods of that
-# path. That is what lets any pod of a path answer any ticket poll or result fetch, so no
-# client->pod stickiness is needed. State is never shared ACROSS paths: a and b hold
-# different weekly datasets and ticket ids hash only the query and database names, so a
-# common cache would serve one path's results for the other path's data.
-# NOTE: mmseqs-app caches jobs in the jobs volume and nothing cleans it up yet. Unlike
-#       the old per-pod ephemeral volumes, these SURVIVE restarts, so they grow until a
-#       cleanup job lands (planned as a separate change). Sized generously as a bridge;
-#       cleanup must delete the redis status key BEFORE the job dir (see cleanup design).
-#       That cleanup also needs a per-path flush when a path receives new data, since
-#       results cached against the previous dataset stay valid-looking otherwise.
+# Per-path shared state: EACH path (a and b) gets its own redis, holding that path's
+# job inputs, ticket statuses, pending queue and rendered results. There is no shared
+# jobs volume any more: workers keep jobs on their own disk only while they run them.
+# State is never shared ACROSS paths: a and b hold different weekly datasets and
+# ticket ids hash only the query and database names, so a common store would serve
+# one path's results for the other path's data.
 # Sizes are PER PATH.
 sharedState:
   redisVolumeSize: 10Gi
-  jobsVolumeSize: 150Gi
+  # Below resources.redis.limits.memory, so redis evicts expiring results instead of
+  # being OOM killed at the container limit. See redis.yaml for why volatile-lru.
+  redisMaxMemory: 700mb
 
 persistentVolumeClaimName: "sequence-pvc"
 persistentVolumeMountPath: "/opt/sequences"
@@ -102,29 +108,12 @@ service:
   # that traffic still reaches exactly one path as it does in production.
   livePath: ""
 
-# Periodic pruning of each path's shared state, by the cleanup CronJob. Nothing else
-# removes either of these: before the shared-state redesign both were wiped by the
-# twice-daily pod restarts.
+# Pruning of each path's pending queue, by the cleanup CronJob. Results are not
+# pruned here: they expire in redis on results.ttl, and job directories are deleted
+# by the worker that made them.
 cleanup:
   enabled: true
   schedule: "*/10 * * * *"
-  # Queued jobs older than this are provably abandoned: clients give up after ~30s
-  # (arches uses a 15s query timeout and a 30s poll deadline), so nothing will ever
-  # collect the result. Keep this well above the client timeout but far below the point
-  # where a queue becomes deeper than the timeout allows.
-  queueMaxAgeMinutes: 5
-  # How long a computed result stays cached. Repeat queries within this window are
-  # served instantly instead of recomputed; a miss just costs a recompute of a couple of
-  # seconds. Kept short because the directory count is what drives the cephfs metadata
-  # load: at ~180 searches/min a day of retention is ~260k directories on one volume,
-  # an hour is ~11k. The cache mostly earns its keep by absorbing duplicate submissions
-  # during retry bursts, which arrive within seconds.
-  cacheMaxAgeMinutes: 60
-  # Job directories with no redis status key are unreachable: nothing can look them up,
-  # so they are pure garbage. The queue prune leaves them behind by design, and losing
-  # redis would orphan everything at once. Only the grace period keeps this safe, by
-  # ignoring directories young enough to belong to a job still being submitted.
-  orphanGraceMinutes: 15
   resources:
     requests:
       cpu: 50m
@@ -133,18 +122,22 @@ cleanup:
       cpu: 1
       memory: 512Mi
 
-probes:
-  # Database that must be advertised by the api for a pod to be considered ready.
-  # /api/databases lists only the databases whose params say COMPLETE, so requiring a
-  # named one turns a "200 OK" into a real statement about this pod being able to serve
-  # searches. Use a database that is never empty (unlike the model DNA/RNA ones, which
-  # have no sequences in some releases): this is also arches' default search target.
-  requiredDatabase: "pdb_and_models_protein_sequence"
+# How long redis keeps each job, which is now the entire retention policy.
+results:
+  # Minutes a finished job's status, input and results are kept. Long enough for a
+  # client to poll and then fetch; a repeat of the same query just runs again.
+  ttlMinutes: 15
+  # Seconds a RUNNING job survives without its worker refreshing it. A worker killed
+  # mid-job stops being RUNNING after this instead of staying so for ever.
+  leaseSeconds: 60
+  # Minutes a queued job's ticket stays known. Also the clock the queue prune runs
+  # on: an entry still queued with no status is one nobody is waiting for.
+  queueMinutes: 5
 
 # ingress declares the Ingress resource to be created and allow access to the service from the external internet.
 # Set ingress.enabled to true to create this Ingress resource. Double-check the host values for your application.
-# No session affinity: job state (redis + jobs volume) is shared by all pods OF A PATH,
-# so any pod of the live path can answer any request.
+# No session affinity: job state lives in that path's redis, so any pod of the live
+# path can answer any request without ever having run the job.
 
 
 ingress:
@@ -234,7 +227,12 @@ appConfigs:
       {
         "verbose": true,
         "server" : {
-          "address"    : "127.0.0.1:3000",
+          "address"    : ":3000",
+          // The api serves its own /api prefix now. nginx used to strip it
+          // ("rewrite ^/api(/.*) $1 break") before proxying, so the api saw
+          // /databases and this was left unset; with nginx gone nothing rewrites
+          // and clients still ask for /api/..., so the api has to answer there.
+          "pathprefix" : "/api/",
           "dbmanagment": false,
           "cors"       : true
         },
@@ -243,6 +241,17 @@ appConfigs:
           "results"      : "/opt/mmseqs-web/jobs",
           "temporary"    : "/tmp",
           "mmseqs"       : "/usr/local/bin/mmseqs"
+        },
+        // How long redis keeps a job. Results live there now: a worker renders what
+        // /api/result/<id>/<entry> serves, stores it, and deletes its job directory,
+        // so this is the whole retention policy and it is memory, not disk.
+        // Measured over 796 real queries: median 187KB of JSON per response, max
+        // 1.7MB, stored gzipped. At ~180 searches/min a 15 minute ttl is well under
+        // 100MB; at 1000/min it would want 5 minutes or a larger redis.
+        "results" : {
+          "ttl"   : {{ .Values.results.ttlMinutes }},
+          "lease" : {{ .Values.results.leaseSeconds }},
+          "queue" : {{ .Values.results.queueMinutes }}
         },
         "redis" : {
           "network"  : "tcp",
@@ -354,51 +363,7 @@ appConfigs:
       kill $PID
       wait $PID 2>/dev/null
       exit 0
-  nginx.conf:
-    value: |-
-      server {
-        listen 80 default;
-      
-        client_max_body_size 100M;
-      
-        access_log /dev/stdout;
-        error_log /dev/stdout info;
-      
-        root /var/www/mmseqs-web;
-        index index.html;
-      
-        location /api {
-          rewrite ^/api(/.*) $1 break;
-          # 127.0.0.1, not localhost: the Go backend only listens on IPv4, and nginx
-          # otherwise tries [::1] first and logs a connection-refused error on every request
-          proxy_pass        http://127.0.0.1:3000/;
-      
-          proxy_set_header  Host             $host;
-          proxy_set_header  X-Real-IP        $remote_addr;
-          proxy_set_header  X-Forwarded-For  $proxy_add_x_forwarded_for;
-        }
-      
-        location / {
-          try_files $uri $uri/ /index.html;
-        }
-      
-        location ~* \.(js|map|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|eot|ttf)$ {
-          expires max;
-          add_header Cache-Control public;
-          log_not_found off;
-        }
-      
-        location = /favicon.ico {
-          log_not_found off;
-          access_log off;
-        }
-      
-        location = /robots.txt {
-          allow all;
-          log_not_found off;
-          access_log off;
-        }
-      }
+
   test.fasta:
     value: |+
       >4HHB_1
@@ -411,8 +376,8 @@ appConfigs:
       echo "# Waiting for the api to be up before warming up"
       # 127.0.0.1, never localhost: localhost also resolves to ::1, which busybox wget
       # tries first, and nginx only listens on IPv4
-      until wget -qO /dev/null http://127.0.0.1/api/databases 2>/dev/null; do sleep 5; done
-      wget --post-data "q=@/tmp/test.fasta&mode=accept&database[]=pdb_and_models_protein_sequence" http://127.0.0.1/api/ticket
+      until wget -qO /dev/null http://127.0.0.1:3000/api/databases 2>/dev/null; do sleep 5; done
+      wget --post-data "q=@/tmp/test.fasta&mode=accept&database[]=pdb_and_models_protein_sequence" http://127.0.0.1:3000/api/ticket
       sleep 60  # give time for query to execute. There's no need to look at results, just let it execute
       echo "# Done warming up"
       sleep 86400 # Sleep for 1 day before stopping and having container restart

@@ -96,6 +96,3 @@ Name for a path's cleanup CronJob and its script ConfigMap.
 {{/*
 Name for a path's jobs PVC (results cache), mounted RWX by all pods of that path.
 */}}
-{{- define "helm_chart.jobsPvcName" -}}
-{{- printf "%s-jobs-%s" (include "helm_chart.fullname" .ctx | trunc 55 | trimSuffix "-") .path }}
-{{- end }}

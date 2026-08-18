@@ -34,6 +34,21 @@ spec:
         - name: redis
           image: "{{ $.Values.image.redis.repository }}:{{ $.Values.image.redis.tag | default "latest" }}"
           imagePullPolicy: {{ $.Values.image.redis.pullPolicy }}
+          # Results live in redis now, so it holds real data rather than a few
+          # status strings. Reaching the container memory limit gets it OOM killed
+          # and takes the path down; reaching maxmemory makes it evict instead, so
+          # maxmemory is set below the limit.
+          #
+          # volatile-lru, never allkeys-lru: only finished jobs carry a TTL, so
+          # eviction can drop results that were expiring anyway but never the
+          # pending queue or the status of a job still queued or running. An evicted
+          # result behaves exactly like an expired one, and the query simply runs
+          # again if anyone asks for it.
+          args:
+            - --maxmemory
+            - {{ $.Values.sharedState.redisMaxMemory | quote }}
+            - --maxmemory-policy
+            - volatile-lru
           ports:
             - name: redis
               containerPort: 6379
@@ -98,23 +113,4 @@ spec:
   resources:
     requests:
       storage: {{ $.Values.sharedState.redisVolumeSize }}
----
-# This path's jobs volume: job inputs and results, written by whichever worker of the
-# path pops the job, readable by every pod of the path so any of them can serve any
-# /result request. Results are keyed by a hash that does not include the data version,
-# so this must never be shared with the other path.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ include "helm_chart.jobsPvcName" $args }}
-  labels:
-    {{- include "helm_chart.labels" $ | nindent 4 }}
-    rcsb.org/path: {{ $path | quote }}
-spec:
-  accessModes:
-    - ReadWriteMany
-  storageClassName: csi-cephfs-sc
-  resources:
-    requests:
-      storage: {{ $.Values.sharedState.jobsVolumeSize }}
 {{- end }}

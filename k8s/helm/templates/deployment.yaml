@@ -121,13 +121,31 @@ spec:
               mountPath: /etc/mmseqs-web/config.json
               subPath: config.json
               readOnly: true
-          # No probe here on purpose: this server listens on 127.0.0.1 only (see
-          # server.address; binding the pod IP would expose the api unproxied, bypassing
-          # nginx's upload limit), and the kubelet probes the pod IP, so httpGet and
-          # tcpSocket cannot reach it. The image has no http client for an exec probe
-          # either. The webserver's readiness probe covers this container instead: it
-          # calls the api through nginx, so a wedged api takes the pod out of the
-          # service. It cannot restart this container, though.
+          # The api binds the pod IP now that nginx is gone (see server.address), so
+          # the kubelet can reach it directly and these are httpGet rather than the
+          # exec probe that used to live on the webserver. That also means a wedged
+          # api finally gets restarted: the old arrangement could only take the pod
+          # out of the service, never restart the container at fault.
+          #
+          # /databases returns 200 once the api is serving. It no longer asserts that
+          # a particular database is advertised: the database-builder init container
+          # already blocks until every non-empty database is COMPLETE, and asserting
+          # it here made pods flap when the api re-indexed them at startup.
+          readinessProbe:
+            httpGet:
+              port: api
+              path: /api/databases
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              port: api
+              path: /api/databases
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 20
+            failureThreshold: 3
           resources:
             {{- toYaml $.Values.resources.api | nindent 12 }}
         - name: mmseqs-web-worker
@@ -146,50 +164,6 @@ spec:
               readOnly: true
           resources:
             {{- toYaml $.Values.resources.worker | nindent 12 }}
-        - name: mmseqs-web-webserver
-          image: "{{ $.Values.image.web_webserver.repository }}:{{ $.Values.image.web_webserver.tag | default $.Chart.AppVersion }}"
-          imagePullPolicy: {{ $.Values.image.web_webserver.pullPolicy }}
-          ports:
-            - containerPort: {{ $.Values.service.port }}
-              name: http
-          volumeMounts:
-            - name: {{ include "helm_chart.configmapName" (dict "ctx" $ "path" .) }}
-              mountPath: /etc/nginx/conf.d/default.conf
-              subPath: nginx.conf
-              readOnly: true
-          resources:
-            {{- toYaml $.Values.resources.webserver | nindent 12 }}
-          readinessProbe:
-            # A 200 from /api/databases only proves nginx and the api are alive: the
-            # endpoint lists just the databases marked COMPLETE, so a pod whose databases
-            # are half built still passes it. Assert instead that the database searches
-            # actually need is advertised, and look up a ticket, which is the cheapest
-            # call that proves the api can reach its redis (a well-formed but unknown id
-            # answers UNKNOWN; /api/databases alone reads params off disk and would pass
-            # with redis down). Databases are prebuilt by the database-builder init
-            # container, so this is usable shortly after the containers start.
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                # 127.0.0.1, never localhost: /etc/hosts maps localhost to ::1 as well,
-                # and this image's wget tries that first, while nginx listens on IPv4
-                # only. On v5's image it happened to pick IPv4 and this passed.
-                - >
-                  wget -qO- http://127.0.0.1/api/databases | grep -q '"path":"{{ $.Values.probes.requiredDatabase }}"' &&
-                  wget -qO- http://127.0.0.1/api/ticket/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA > /dev/null
-            initialDelaySeconds: 15
-            timeoutSeconds: 5
-            periodSeconds: 10
-          livenessProbe:
-            # static index: restarts a wedged nginx without depending on the api
-            httpGet:
-              port: http
-              path: /
-            initialDelaySeconds: 30
-            timeoutSeconds: 5
-            periodSeconds: 20
-            failureThreshold: 3
         - name: query-warmer
           image: busybox:1.37
           imagePullPolicy: Always
@@ -213,12 +187,14 @@ spec:
                 resources:
                   requests:
                     storage: {{ $.Values.ephemeralVolumes.databases.sizeLimit }}
-        # Shared by all pods of THIS path (never across paths, which hold different
-        # datasets): any pod of the path can serve any of its job's results, and the
-        # results cache survives restarts. See redis.yaml for the matching PVC.
+        # Scratch, not shared state. A worker stages a job here, mmseqs runs against
+        # real files, and the worker deletes the directory as soon as it has put the
+        # rendered result in redis, where any pod of the path can read it. Only jobs
+        # in flight are ever on disk, so this needs room for a handful of them and
+        # nothing survives a restart worth keeping.
         - name: jobs
-          persistentVolumeClaim:
-            claimName: {{ include "helm_chart.jobsPvcName" (dict "ctx" $ "path" .) }}
+          emptyDir:
+            sizeLimit: {{ $.Values.ephemeralVolumes.jobs.sizeLimit }}
         - name: sequence-vol
           persistentVolumeClaim:
             claimName: {{  $.Values.persistentVolumeClaimName }}

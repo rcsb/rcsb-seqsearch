@@ -17,72 +17,34 @@ metadata:
 data:
   cleanup.sh: |
     #!/bin/sh
-    # Prunes the two things that grow without bound in a path's shared state:
-    #   1. the pending queue, of jobs nobody is waiting for any more
-    #   2. the results cache on the jobs volume
+    # Prunes abandoned entries from a path's pending queue.
+    #
+    # Results are not pruned here any more: they live in redis and expire on
+    # results.ttl, and job directories are scratch on a worker's own disk which
+    # that worker deletes as soon as it has stored the result. There is no shared
+    # volume left for this job to reach, which is the point.
     set -u
     REDIS="{{ include "helm_chart.redisName" $args }}"
-    JOBS=/jobs
-    Q_AGE={{ $.Values.cleanup.queueMaxAgeMinutes }}
-    C_AGE={{ $.Values.cleanup.cacheMaxAgeMinutes }}
-    O_AGE={{ $.Values.cleanup.orphanGraceMinutes }}
 
-    echo "$(date -Iseconds) cleanup path={{ $path }} queue_age=${Q_AGE}m cache_age=${C_AGE}m orphan_grace=${O_AGE}m"
+    echo "$(date -Iseconds) cleanup path={{ $path }}"
 
-    # 1. Abandoned queue entries.
-    # Clients give up after ~30s (arches: 15s query timeout, 30s poll deadline), so a job
-    # still waiting to start after Q_AGE minutes will never be collected by anyone. Left
-    # alone these accumulate until the queue is deeper than the client timeout allows, at
-    # which point every query fails even though the workers are keeping up.
-    # The queue holds only jobs that have not been picked up (the worker pops with
-    # ZPopMin), so nothing in progress can be removed here.
+    # A queued job's status expires on results.queue, so an entry still in the
+    # pending set with no status key is one nobody is waiting for: clients give up
+    # after ~30s (arches: 15s query timeout, 30s poll deadline). Left alone these
+    # accumulate until the queue is deeper than the client timeout allows, at which
+    # point every query fails even though the workers are keeping up.
+    #
+    # The queue holds only jobs no worker has taken (workers pop with ZPopMin), so
+    # nothing in progress can be removed here.
     redis-cli -h "$REDIS" zrange mmseqs:pending 0 -1 | tr -d '\r' | sort > /tmp/queued.txt
-    find "$JOBS" -mindepth 1 -maxdepth 1 -type d -mmin +"$Q_AGE" | sed 's|.*/||' | sort > /tmp/old.txt
-    comm -12 /tmp/queued.txt /tmp/old.txt > /tmp/stale_queue.txt
-    n=$(wc -l < /tmp/stale_queue.txt)
+    redis-cli -h "$REDIS" --scan --pattern 'mmseqs:status:*' 2>/dev/null | tr -d '\r' | sed 's|^mmseqs:status:||' | sort > /tmp/known.txt
+    comm -23 /tmp/queued.txt /tmp/known.txt > /tmp/stale.txt
+    n=$(wc -l < /tmp/stale.txt)
     if [ "$n" -gt 0 ]; then
-      # Queue entry first, then the status key. A resubmission arriving in between is
-      # handed the existing ticket, which is harmless; the reverse order would let it
-      # create a ticket that we then drop from the queue, leaving it PENDING forever.
-      xargs -n 200 redis-cli -h "$REDIS" zrem mmseqs:pending < /tmp/stale_queue.txt > /dev/null
-      sed 's|^|mmseqs:status:|' /tmp/stale_queue.txt | xargs -n 200 redis-cli -h "$REDIS" del > /dev/null
+      xargs -n 200 redis-cli -h "$REDIS" zrem mmseqs:pending < /tmp/stale.txt > /dev/null
     fi
     echo "queue: dropped $n abandoned of $(wc -l < /tmp/queued.txt) queued"
-
-    # remove a list of job directories read from stdin
-    rm_dirs() {
-      while read -r id; do
-        # ticket ids are base64url and may start with '-', so always keep the $JOBS prefix
-        case "$id" in ''|*/*|.|..) continue ;; esac
-        rm -rf "$JOBS/$id"
-      done
-    }
-
-    # 2. Expired cached results.
-    # Delete the redis key BEFORE the directory: a cached COMPLETE status pointing at
-    # files that are gone hands the user a broken ticket, whereas a missing key just
-    # means the next identical query recomputes.
-    find "$JOBS" -mindepth 1 -maxdepth 1 -type d -mmin +"$C_AGE" | sed 's|.*/||' > /tmp/expired.txt
-    m=$(wc -l < /tmp/expired.txt)
-    if [ "$m" -gt 0 ]; then
-      sed 's|^|mmseqs:status:|' /tmp/expired.txt | xargs -n 200 redis-cli -h "$REDIS" del > /dev/null
-      rm_dirs < /tmp/expired.txt
-    fi
-    echo "cache: removed $m expired job dirs"
-
-    # 3. Orphaned directories: no redis key, so nothing can ever look them up again.
-    # The queue prune above leaves these behind by design, and a redis restore or flush
-    # orphans everything at once. Only directories older than the grace period are
-    # considered, so a job whose files exist but whose key is a moment away from being
-    # written is never touched.
-    redis-cli -h "$REDIS" --scan --pattern 'mmseqs:status:*' 2>/dev/null | tr -d '\r' | sed 's|^mmseqs:status:||' | sort > /tmp/known.txt
-    find "$JOBS" -mindepth 1 -maxdepth 1 -type d -mmin +"$O_AGE" | sed 's|.*/||' | sort > /tmp/candidates.txt
-    comm -23 /tmp/candidates.txt /tmp/known.txt > /tmp/orphans.txt
-    o=$(wc -l < /tmp/orphans.txt)
-    [ "$o" -gt 0 ] && rm_dirs < /tmp/orphans.txt
-    echo "orphans: removed $o job dirs with no redis key"
-    echo "remaining: $(find "$JOBS" -mindepth 1 -maxdepth 1 -type d | wc -l) job dirs, $(redis-cli -h "$REDIS" dbsize) redis keys"
-    df -h "$JOBS" | tail -1
+    echo "remaining: $(redis-cli -h "$REDIS" dbsize) redis keys, $(redis-cli -h "$REDIS" info memory | grep used_memory_human | tr -d '\r')"
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -121,17 +83,12 @@ spec:
               imagePullPolicy: {{ $.Values.image.redis.pullPolicy }}
               command: [ "/bin/sh", "/opt/cleanup/cleanup.sh" ]
               volumeMounts:
-                - mountPath: /jobs
-                  name: jobs
                 - mountPath: /opt/cleanup
                   name: script
                   readOnly: true
               resources:
                 {{- toYaml $.Values.cleanup.resources | nindent 16 }}
           volumes:
-            - name: jobs
-              persistentVolumeClaim:
-                claimName: {{ include "helm_chart.jobsPvcName" $args }}
             - name: script
               configMap:
                 name: {{ include "helm_chart.cleanupName" $args }}
