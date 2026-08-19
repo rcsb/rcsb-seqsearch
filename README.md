@@ -54,6 +54,17 @@ direction for what follows.
 - the completion line names the job type, the ticket and how long the work took
   (`job search f8Qy... finished in 412ms`), rather than "Process finished gracefully"
 
+**Startup**
+
+- the server no longer submits an index job for a database that is already
+  COMPLETE. The `database-builder` init container has just built them, so those
+  jobs only made a worker re-verify an index and page it back in — measured at
+  seven jobs and 4.3 minutes on one pod, during which it was Ready, taking
+  queries, and running none of them. A search submitted into that window waited
+  over a minute for a 37ms job
+- it also stopped databases being marked RUNNING after startup, which is what
+  used to drop them out of `/api/databases` and make readiness flap
+
 **Fixes carried in the fork**
 
 - two result endpoints dereferenced a nil error when a job was simply not COMPLETE,
@@ -146,11 +157,13 @@ binds the pod IP now, so the kubelet can reach it directly — which also means 
 api finally gets **restarted**, where the old probe on nginx could only take the pod out
 of the service.
 
-The probe no longer asserts that a particular database is advertised. The
-database-builder init container already blocks until every non-empty database is
-COMPLETE, and asserting it in the probe made pods flap: the api re-submits an index job
-for every database at startup, each marked RUNNING for about a minute while mmseqs
-re-verifies it, and `/api/databases` lists only COMPLETE ones.
+The probe does not assert that a particular database is advertised, as the old exec
+probe did: httpGet cannot look at the response body, and it no longer needs to. The
+database-builder init container blocks until every non-empty database is COMPLETE, and
+the fork does not re-submit index jobs for databases that are already built, so nothing
+marks one RUNNING after startup. That re-indexing is what used to make pods flap here,
+each database dropping out of `/api/databases` for about a minute while it was
+re-verified.
 
 ### Cleanup
 

@@ -127,10 +127,13 @@ spec:
           # api finally gets restarted: the old arrangement could only take the pod
           # out of the service, never restart the container at fault.
           #
-          # /databases returns 200 once the api is serving. It no longer asserts that
-          # a particular database is advertised: the database-builder init container
-          # already blocks until every non-empty database is COMPLETE, and asserting
-          # it here made pods flap when the api re-indexed them at startup.
+          # /databases returns 200 once the api is serving. It does not assert that a
+          # particular database is advertised, as the old exec probe did: httpGet
+          # cannot look at the body, and it does not need to. The database-builder
+          # init container blocks until every non-empty database is COMPLETE, and the
+          # fork no longer re-submits index jobs for databases that are already built,
+          # so nothing marks one RUNNING after startup and drops it from the listing.
+          # That re-indexing is what used to make pods flap here.
           readinessProbe:
             httpGet:
               port: api
