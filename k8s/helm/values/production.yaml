@@ -226,6 +226,11 @@ appConfigs:
     value: |-
       {
         "verbose": true,
+        // Drop mmseqs' own output, ~200 lines per search. It rotates the container
+        // log away in seconds under load and takes the app's own logging with it:
+        // the per-job completion line and the api access log are what an incident
+        // gets reconstructed from. Set false on a pod to debug a failing search.
+        "quietmmseqs": true,
         "server" : {
           "address"    : ":3000",
           // The api serves its own /api prefix now. nginx used to strip it
