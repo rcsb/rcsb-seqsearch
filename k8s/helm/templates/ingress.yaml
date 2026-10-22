@@ -26,7 +26,21 @@ spec:
   {{- if and .Values.ingress.className (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion) }}
   ingressClassName: {{ .Values.ingress.className }}
   {{- end }}
-  {{- if .Values.ingress.tls }}
+  {{- if .Values.ingress.tlsPerHost }}
+  {{- /* One cert per host, secret named <host>-tls. Needed when the ACME provider
+         only issues single-name certs, and lets every coast share one values file.
+         A host with a `coast` only gets a cert when it matches ingress.coast, since
+         a cluster can't pass HTTP-01 for a name that resolves to another coast.
+         Rules below still list every host. With ingress.coast unset, all hosts get one. */}}
+  tls:
+    {{- range .Values.ingress.hosts }}
+    {{- if or (not $.Values.ingress.coast) (not .coast) (eq .coast $.Values.ingress.coast) }}
+    - hosts:
+        - {{ .host | quote }}
+      secretName: {{ printf "%s-tls" .host }}
+    {{- end }}
+    {{- end }}
+  {{- else if .Values.ingress.tls }}
   tls:
     {{- range .Values.ingress.tls }}
     - hosts:
