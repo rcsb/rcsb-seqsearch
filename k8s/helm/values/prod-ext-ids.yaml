@@ -1,0 +1,498 @@
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Sized from measured throughput: one pod drains ~80 searches/min, and east peaked at
+# ~180/min in Aug 2026 with 3 pods (~250/min), a margin thin enough that one stalled
+# worker put the service underwater and built an unrecoverable queue. 5 gives ~400/min
+# and still covers peak with one worker lost. NOTE: this applies to both paths, so the
+# standby path runs the same number of pods without serving traffic.
+replicaCount: 2
+
+# seqsearch is not a great candidate for autoscaling; it takes too long to start up.
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 80
+
+# Needs to cover one pod's startup (init database build ~5min + ~1.5min to ready,
+# measured 2026-08: ~7min total), not the whole rollout: the progress clock resets
+# every time a new pod becomes ready. Was 6300 when the in-band index build took
+# 25-30min per pod.
+deploymentProgressTimeOut: 1800
+
+imagePullSecrets: "harbor-docker-registry-conf"
+
+# The Docker image reference which this Helm chart will run.
+image:
+  redis:
+    repository: "harbor.devops.k8s.rcsb.org/dockerhub/library/redis"
+    pullPolicy: IfNotPresent
+    # Pin the patch version, do NOT use a floating tag like "alpine". Nodes cache
+    # whatever a floating tag pointed at when they first pulled it, so different nodes
+    # end up running different redis versions. That was harmless while redis data was
+    # ephemeral, but now that job state is persisted an older redis can be scheduled
+    # onto the RDB written by a newer one, fail with "Can't handle RDB format version",
+    # and crash-loop, taking the whole path out of service.
+    tag: "8.8.1-alpine"
+  # Our own build of the v7 fork, not the upstream Docker Hub mirror: keeping
+  # results in redis is a change upstream does not have. api and worker are the
+  # same image, run with different flags.
+  #
+  # "production" is applied by the pipeline's retag job on every push to the
+  # mainline branch (workflow-docker.yaml sets mainline_branch: master-rcsb), so it
+  # MOVES. That is why the pull policy is Always: under IfNotPresent a node keeps
+  # serving whatever it cached the first time, and pods end up quietly running
+  # different builds from each other. To pin a release instead, use one of the
+  # immutable tags the same build publishes, sha-<commit> or gha_run_number_<n>,
+  # and set the policy back to IfNotPresent.
+  web_api:
+    repository: "harbor.devops.k8s.rcsb.org/rcsb/rcsb-mmseqs-app"
+    pullPolicy: Always
+    tag: "production"
+  web_worker:
+    repository: "harbor.devops.k8s.rcsb.org/rcsb/rcsb-mmseqs-app"
+    pullPolicy: Always
+    tag: "production"
+
+ephemeralVolumes:
+  # This is where the sequence databases and indices are stored.
+  databases:
+    sizeLimit: 60Gi
+  # Scratch for jobs in flight. A worker stages a job here, mmseqs runs against real
+  # files, and the directory is deleted as soon as the result is in redis, so this
+  # holds a handful of jobs rather than an hour of them. It is an emptyDir, so it
+  # counts against the container's ephemeral-storage limit: keep that above this.
+  jobs:
+    sizeLimit: 2Gi
+
+# Per-path shared state: EACH path (a and b) gets its own redis, holding that path's
+# job inputs, ticket statuses, pending queue and rendered results. There is no shared
+# jobs volume any more: workers keep jobs on their own disk only while they run them.
+# State is never shared ACROSS paths: a and b hold different weekly datasets and
+# ticket ids hash only the query and database names, so a common store would serve
+# one path's results for the other path's data.
+# Sizes are PER PATH.
+sharedState:
+  redisVolumeSize: 10Gi
+  # Below resources.redis.limits.memory, so redis evicts expiring results instead of
+  # being OOM killed at the container limit. See redis.yaml for why volatile-lru.
+  redisMaxMemory: 700mb
+
+# TODO: check persistentVolumeClaimName value
+persistentVolumeClaimName: "sequence-pvc"
+persistentVolumeMountPath: "/opt/airflow/sequences"
+
+deploymentStrategy:
+  #https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
+  #Type is either RollingUpdate or Recreate
+  type: "RollingUpdate"
+  #For rolling update, what percentage of total pods can be created above desired amount
+  maxSurge: 25%
+  #For rolling update, what percentage of total pods can be brought down to update
+  maxUnavailable: 25%
+
+# securityContext sets the container security values of the Pod. These default values are the recommended
+# values for all applications. Adjust as needed for your application purposes, but be aware of the security
+# implications from these changes.
+securityContext:
+  readOnlyRootFilesystem: true
+
+# service declares the type of Service resource to be created, as well as the target port of the Pod to send requests.
+service:
+  type: ClusterIP
+  port: 80
+  # Which path the main service (and so the ingress) points at. MUST stay empty here:
+  # in production the path-operator injects the live path into the selector, reading it
+  # from the namespace's live-path ConfigMap, and it is switched weekly. Set this only
+  # in namespaces where the operator does not run (e.g. personal test namespaces), so
+  # that traffic still reaches exactly one path as it does in production.
+  livePath: ""
+
+# Pruning of each path's pending queue, by the cleanup CronJob. Results are not
+# pruned here: they expire in redis on results.ttl, and job directories are deleted
+# by the worker that made them.
+cleanup:
+  enabled: true
+  schedule: "*/10 * * * *"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 1
+      memory: 512Mi
+
+# How long redis keeps each job, which is now the entire retention policy.
+results:
+  # Minutes a finished job's status, input and results are kept. Long enough for a
+  # client to poll and then fetch; a repeat of the same query just runs again.
+  ttlMinutes: 15
+  # Seconds a RUNNING job survives without its worker refreshing it. A worker killed
+  # mid-job stops being RUNNING after this instead of staying so for ever.
+  leaseSeconds: 60
+  # Minutes a queued job's ticket stays known. Also the clock the queue prune runs
+  # on: an entry still queued with no status is one nobody is waiting for.
+  queueMinutes: 5
+
+# ingress declares the Ingress resource to be created and allow access to the service from the external internet.
+# Set ingress.enabled to true to create this Ingress resource. Double-check the host values for your application.
+# No session affinity: job state lives in that path's redis, so any pod of the live
+# path can answer any request without ever having run the job.
+
+
+ingress:
+  enabled: true
+  className: haproxy
+  annotations:
+    cert-manager.io/cluster-issuer: rutgers-acme
+    kubernetes.io/tls-acme: "true"
+    haproxy.org/allow-list: >-
+      128.6.158.0/23, 132.249.210.0/24, 132.249.213.0/24, 163.114.226.0/24, 163.114.225.0/24, 
+      209.177.156.77/32, 147.75.68.120/29, 163.114.227.0/24, 163.114.228.0/24, 163.114.224.0/24, 147.75.66.200/29,
+      163.114.230.0/24, 163.114.232.0/24
+  hosts:
+    - host: seqsearch-beta.k8s.rcsb.org
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+    - host: seqsearch-beta.east.k8s.rcsb.org
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+    - host: seqsearch-beta.west.k8s.rcsb.org
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+    - host: seqsearch-beta.rcsb.org
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+    - host: seqsearch-beta-east.rcsb.org
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+    - host: seqsearch-beta-west.rcsb.org
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls:
+    - hosts:
+        - seqsearch-beta.k8s.rcsb.org
+        - seqsearch-beta.west.k8s.rcsb.org
+        - seqsearch-beta.east.k8s.rcsb.org
+        - seqsearch-beta.rcsb.org
+        - seqsearch-beta-east.rcsb.org
+        - seqsearch-beta-west.rcsb.org
+      secretName: seqsearch-beta.k8s.rcsb.org-tls
+
+# Define resource limits for your application. Especially important if you enable autoscaling for this Helm chart.
+# Deploy without limits first to test the application performance, then tune afterwards to ensure that autoscaling
+# will work as expected.
+resources:
+  redis:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  api:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 2
+      memory: 1Gi
+  worker:
+    requests:
+      cpu: 1
+      memory: 45Gi
+    limits:
+      # Searches now pass --threads explicitly (see databaseParams), so the thread count
+      # no longer comes from mmseqs auto-detecting the node's cores
+      cpu: 8
+      memory: 90Gi
+  webserver:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+# appConfigs defines ConfigMap resources which are mounted into the container environment as a file.
+appConfigs:
+  config.json:
+    value: |-
+      {
+        "verbose": true,
+        // Drop mmseqs' own output, ~200 lines per search. It rotates the container
+        // log away in seconds under load and takes the app's own logging with it:
+        // the per-job completion line and the api access log are what an incident
+        // gets reconstructed from. Set false on a pod to debug a failing search.
+        "quietmmseqs": true,
+        "server" : {
+          "address"    : ":3000",
+          // The api serves its own /api prefix now. nginx used to strip it
+          // ("rewrite ^/api(/.*) $1 break") before proxying, so the api saw
+          // /databases and this was left unset; with nginx gone nothing rewrites
+          // and clients still ask for /api/..., so the api has to answer there.
+          "pathprefix" : "/api/",
+          "dbmanagment": false,
+          "cors"       : true
+        },
+        "paths" : {
+          "databases"    : "/opt/mmseqs-web/databases",
+          "results"      : "/opt/mmseqs-web/jobs",
+          "temporary"    : "/tmp",
+          "mmseqs"       : "/usr/local/bin/mmseqs"
+        },
+        // How long redis keeps a job. Results live there now: a worker renders what
+        // /api/result/<id>/<entry> serves, stores it, and deletes its job directory,
+        // so this is the whole retention policy and it is memory, not disk.
+        // Measured over 796 real queries: median 187KB of JSON per response, max
+        // 1.7MB, stored gzipped. At ~180 searches/min a 15 minute ttl is well under
+        // 100MB; at 1000/min it would want 5 minutes or a larger redis.
+        "results" : {
+          "ttl"   : {{ .Values.results.ttlMinutes }},
+          "lease" : {{ .Values.results.leaseSeconds }},
+          "queue" : {{ .Values.results.queueMinutes }}
+        },
+        "redis" : {
+          "network"  : "tcp",
+          "address"  : "{{ include "helm_chart.redisName" (dict "ctx" . "path" .path) }}:6379",
+          "password" : "",
+          "index"    : 0
+        },
+        "mail" : {
+          "type"      : "null",
+          "sender"    : "mail@example.org",
+          "templates" : {
+            "success" : {
+              "subject" : "Done -- %s",
+              "body"    : "Dear User,\nThe results of your submitted job are available now at https://search.mmseqs.com/queue/%s .\n"
+            },
+            "timeout" : {
+              "subject" : "Timeout -- %s",
+              "body"    : "Dear User,\nYour submitted job timed out. More details are available at https://search.mmseqs.com/queue/%s .\nPlease adjust the job and submit it again.\n"
+            },
+            "error"   : {
+              "subject" : "Error -- %s",
+              "body"    : "Dear User,\nYour submitted job failed. More details are available at https://search.mmseqs.com/queue/%s .\nPlease submit your job later again.\n"
+            }
+          }
+        }
+      }
+  # Config for the database-builder init container: same as config.json but with a
+  # container-local jobs dir, so the local-mode build queue never touches the shared
+  # jobs volume or redis. Keeping that dir private also matters because local mode
+  # deletes job directories it considers broken when it starts up.
+  # "local.workers" is REQUIRED from v7 on: local mode used to start one worker
+  # unconditionally, and now starts however many this says, so leaving it out means no
+  # worker, no databases ever built, and an init container that waits forever.
+  config-init.json:
+    value: |-
+      {
+        "verbose": true,
+        "server" : {
+          "address"    : "127.0.0.1:3000",
+          "dbmanagment": false,
+          "cors"       : true
+        },
+        "paths" : {
+          "databases"    : "/opt/mmseqs-web/databases",
+          "results"      : "/tmp/init-jobs",
+          "temporary"    : "/tmp",
+          "mmseqs"       : "/usr/local/bin/mmseqs"
+        },
+        "local" : {
+          "workers" : 1
+        },
+        "redis" : {
+          "network"  : "tcp",
+          "address"  : "localhost:6379",
+          "password" : "",
+          "index"    : 0
+        },
+        "mail" : {
+          "type"      : "null",
+          "sender"    : "mail@example.org",
+          "templates" : {
+            "success" : { "subject" : "-- %s", "body" : "%s" },
+            "timeout" : { "subject" : "-- %s", "body" : "%s" },
+            "error"   : { "subject" : "-- %s", "body" : "%s" }
+          }
+        }
+      }
+  # Builds every sequence database before the main containers start. The app builds
+  # databases via IndexJobs through its job queue; with the shared redis queue those
+  # jobs are deduplicated globally and each database would be built on only ONE pod
+  # (leaving every other pod unable to serve searches for it). Building in an init
+  # container in -local mode (private local queue) guarantees every pod has all
+  # databases before its worker ever consumes a shared-queue job. CheckDatabase
+  # skips databases whose files already exist, so the runtime index jobs become no-ops.
+  build_databases.sh:
+    value: |+
+      #!/bin/sh
+      # Waits for "status":"COMPLETE" in each .params file, which is what the app itself
+      # writes once a database is fully usable and what the server checks when validating
+      # a search ("Selected databases are not valid!" otherwise). Do NOT wait on the .idx
+      # files instead: they appear before the status is written, so the builder would be
+      # killed in between and the database would stay stuck at RUNNING forever.
+      echo "# Building sequence databases via mmseqs-web local mode"
+      mkdir -p /tmp/init-jobs
+      /usr/local/bin/mmseqs-web -local -config /etc/mmseqs-web/config-init.json &
+      PID=$!
+      while true; do
+        alldone=1
+        for p in /opt/mmseqs-web/databases/*.params; do
+          [ -e "$p" ] || continue
+          base=${p%.params}
+          # empty FASTA files (e.g. no model DNA/RNA sequences) are not indexed by the app
+          [ -s "$base.fasta" ] || continue
+          case "$(cat $p)" in
+            *'"status":"COMPLETE"'*) ;;
+            *'"status":"ERROR"'*)
+              echo "# ERROR: indexing failed for $base";
+              kill $PID 2>/dev/null; exit 1 ;;
+            *) alldone=0 ;;
+          esac
+          [ "$alldone" = 1 ] || break
+        done
+        [ "$alldone" = 1 ] && break
+        kill -0 $PID 2>/dev/null || { echo "# ERROR: mmseqs-web exited before databases were built"; exit 1; }
+        sleep 10
+      done
+      echo "# All databases built and marked COMPLETE:"
+      grep -o '"status":"[A-Z]*"' /opt/mmseqs-web/databases/*.params
+      kill $PID
+      wait $PID 2>/dev/null
+      exit 0
+
+  test.fasta:
+    value: |+
+      >4HHB_1
+      VLSPADKTNVKAAWGKVGAHAGEYGAEALERMFLSFPTTKTYFPHFDLSHGSAQVKGHGKKVADALTNAVAHVDDMPNALSALSDLHAHKLRVDPVNFKLLSHCLLVTLAAHLPAEFTPAVHASLDKFLASVSTVLTSKYR
+  warm_up_query.sh:
+    value: |+
+      #!/bin/sh
+      # Warm up seqsearch service with one query. The first query on a cold pod is slow (page cache); this guarantees that users don't see that problem.
+      # Databases are prebuilt by the database-builder init container, so there is no need for the old fixed 1440s sleep: just wait until the api answers.
+      echo "# Waiting for the api to be up before warming up"
+      # 127.0.0.1, never localhost: localhost also resolves to ::1, which busybox wget
+      # tries first, and nginx only listens on IPv4
+      until wget -qO /dev/null http://127.0.0.1:3000/api/databases 2>/dev/null; do sleep 5; done
+      wget --post-data "q=@/tmp/test.fasta&mode=accept&database[]=pdb_and_models_protein_sequence" http://127.0.0.1:3000/api/ticket
+      sleep 60  # give time for query to execute. There's no need to look at results, just let it execute
+      echo "# Done warming up"
+      sleep 86400 # Sleep for 1 day before stopping and having container restart
+databaseParams:
+  pdb_protein_sequence.params:
+    value: |-
+      {
+        "display": {
+          "name": "PDB protein sequence (seqres)",
+          "version": "$today",
+          "default": true,
+          "order": 0,
+          "index": "-s 7.5",
+          "search": "-s 7.5 --max-seqs 2000 --threads 2"
+        }
+      }
+  pdb_dna_sequence.params:
+    value: |-
+      {
+        "display": {
+          "name": "PDB DNA sequence (seqres)",
+          "version": "$today",
+          "default": false,
+          "order": 1,
+          "index": "--search-type 3",
+          "search": "--max-seqs 2000 --search-type 3 --strand 1 --threads 2"
+        }
+      }
+  pdb_rna_sequence.params:
+    value: |-
+      {
+        "display": {
+          "name": "PDB RNA sequence (seqres)",
+          "version": "$today",
+          "default": false,
+          "order": 2,
+          "index": "--search-type 3",
+          "search": "--max-seqs 2000 --search-type 3 --strand 1 --threads 2"
+        }
+      }
+  models_protein_sequence.params:
+    value: |-
+      {
+        "display": {
+          "name": "Models protein sequence (seqres)",
+          "version": "$today",
+          "default": false,
+          "order": 3,
+          "index": "-s 7.5",
+          "search": "-s 7.5 --max-seqs 2000 --threads 2"
+        }
+      }
+  models_dna_sequence.params:
+    value: |-
+      {
+        "display": {
+          "name": "Models DNA sequence (seqres)",
+          "version": "$today",
+          "default": false,
+          "order": 4,
+          "index": "--search-type 3",
+          "search": "--max-seqs 2000 --search-type 3 --strand 1 --threads 2"
+        }
+      }
+  models_rna_sequence.params:
+    value: |-
+      {
+        "display": {
+          "name": "Models RNA sequence (seqres)",
+          "version": "$today",
+          "default": false,
+          "order": 5,
+          "index": "--search-type 3",
+          "search": "--max-seqs 2000 --search-type 3 --strand 1 --threads 2"
+        }
+      }
+  pdb_and_models_protein_sequence.params:
+    value: |-
+      {
+        "display": {
+          "name": "PDB & Models protein sequence (seqres)",
+          "version": "$today",
+          "default": false,
+          "order": 6,
+          "index": "-s 7.5",
+          "search": "-s 7.5 --max-seqs 2000 --threads 2"
+        }
+      }
+  pdb_and_models_dna_sequence.params:
+    value: |-
+      {
+        "display": {
+          "name": "PDB & Models DNA sequence (seqres)",
+          "version": "$today",
+          "default": false,
+          "order": 7,
+          "index": "--search-type 3",
+          "search": "--max-seqs 2000 --search-type 3 --strand 1 --threads 2"
+        }
+      }
+  pdb_and_models_rna_sequence.params:
+    value: |-
+      {
+        "display": {
+          "name": "PDB & Models RNA sequence (seqres)",
+          "version": "$today",
+          "default": false,
+          "order": 8,
+          "index": "--search-type 3",
+          "search": "--max-seqs 2000 --search-type 3 --strand 1 --threads 2"
+        }
+      }
