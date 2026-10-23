@@ -107,7 +107,8 @@ service:
   # from the namespace's live-path ConfigMap, and it is switched weekly. Set this only
   # in namespaces where the operator does not run (e.g. personal test namespaces), so
   # that traffic still reaches exactly one path as it does in production.
-  livePath: ""
+  # TODO: remove this once the operator is in production.
+  livePath: "b"
 
 # Pruning of each path's pending queue, by the cleanup CronJob. Results are not
 # pruned here: they expire in redis on results.ttl, and job directories are deleted
