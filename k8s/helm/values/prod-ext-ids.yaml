@@ -154,38 +154,40 @@ ingress:
       163.114.230.0/24, 163.114.232.0/24
   hosts:
     - host: seqsearch-beta.k8s.rcsb.org
+      # no coast: this name can resolve to either cluster, so both request its cert
       paths:
         - path: /
           pathType: ImplementationSpecific
     - host: seqsearch-beta.east.k8s.rcsb.org
+      coast: east
       paths:
         - path: /
           pathType: ImplementationSpecific
     - host: seqsearch-beta.west.k8s.rcsb.org
+      coast: west
       paths:
         - path: /
           pathType: ImplementationSpecific
     - host: seqsearch-beta.rcsb.org
+      # no coast: this name can resolve to either cluster, so both request its cert
       paths:
         - path: /
           pathType: ImplementationSpecific
     - host: seqsearch-beta-east.rcsb.org
+      coast: east
       paths:
         - path: /
           pathType: ImplementationSpecific
     - host: seqsearch-beta-west.rcsb.org
+      coast: west
       paths:
         - path: /
           pathType: ImplementationSpecific
-  tls:
-    - hosts:
-        - seqsearch-beta.k8s.rcsb.org
-        - seqsearch-beta.west.k8s.rcsb.org
-        - seqsearch-beta.east.k8s.rcsb.org
-        - seqsearch-beta.rcsb.org
-        - seqsearch-beta-east.rcsb.org
-        - seqsearch-beta-west.rcsb.org
-      secretName: seqsearch-beta.k8s.rcsb.org-tls
+  # One single-name cert per host in ingress.hosts (secret <host>-tls); the current
+  # ACME provider rejects multi-SAN requests. A host's `coast` is the cluster whose
+  # DNS it resolves to; only that cluster requests its cert (ingress.coast is set by
+  # ArgoCD from the cluster's regionID).
+  tlsPerHost: true
 
 # Define resource limits for your application. Especially important if you enable autoscaling for this Helm chart.
 # Deploy without limits first to test the application performance, then tune afterwards to ensure that autoscaling
