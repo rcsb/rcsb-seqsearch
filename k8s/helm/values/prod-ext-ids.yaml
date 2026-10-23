@@ -80,7 +80,7 @@ sharedState:
   redisMaxMemory: 700mb
 
 # TODO: check persistentVolumeClaimName value
-persistentVolumeClaimName: "sequence-pvc"
+persistentVolumeClaimName: "sequences-airflow-pvc"
 persistentVolumeMountPath: "/opt/airflow/sequences"
 
 deploymentStrategy:
