@@ -79,9 +79,8 @@ sharedState:
   # being OOM killed at the container limit. See redis.yaml for why volatile-lru.
   redisMaxMemory: 700mb
 
-# TODO: check persistentVolumeClaimName value
-persistentVolumeClaimName: "sequences-airflow-pvc"
-persistentVolumeMountPath: "/opt/airflow/sequences"
+persistentVolumeClaimName: "sequence-pvc"
+persistentVolumeMountPath: "/opt/sequences"
 
 deploymentStrategy:
   #https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
@@ -107,8 +106,7 @@ service:
   # from the namespace's live-path ConfigMap, and it is switched weekly. Set this only
   # in namespaces where the operator does not run (e.g. personal test namespaces), so
   # that traffic still reaches exactly one path as it does in production.
-  # TODO: remove this once the operator is in production.
-  livePath: "b"
+  livePath: ""
 
 # Pruning of each path's pending queue, by the cleanup CronJob. Results are not
 # pruned here: they expire in redis on results.ttl, and job directories are deleted
